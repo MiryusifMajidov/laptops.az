@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400" fill="none">
+  <g stroke="#ffffff" stroke-opacity="0.5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <!-- monitor -->
+    <rect x="360" y="96" width="196" height="132" rx="10" fill="#ffffff" fill-opacity="0.05"/>
+    <rect x="378" y="114" width="160" height="96" rx="4" fill="#ffffff" fill-opacity="0.09"/>
+    <path d="M446 228 L446 258 M410 262 L482 262"/>
+    <!-- tower -->
+    <rect x="574" y="120" width="52" height="150" rx="8" fill="#ffffff" fill-opacity="0.06"/>
+    <line x1="588" y1="140" x2="612" y2="140"/>
+    <line x1="588" y1="158" x2="612" y2="158"/>
+    <circle cx="600" cy="240" r="6" fill="#ffffff" fill-opacity="0.5"/>
+  </g>
+</svg>

@@ -1,0 +1,115 @@
+====================================================
+  LAPTOPS.AZ — MOBİL TƏTBİQ (iOS + Android)
+  Flutter ilə yazılıb. Müştəri tərəfi (saytın telefon versiyası).
+====================================================
+
+Bu qovluqda TƏTBİQİN BÜTÜN KODU hazırdır (app_src qovluğunda).
+Onu telefonda işlətmək / APK düzəltmək üçün aşağıdakı addımları izlə.
+Bir dəfə qurursan, sonra hər dəfə sadəcə "flutter run" bəsdir.
+
+
+────────────────────────────────────────────────────
+ADDIM 1 — FLUTTER + ANDROID STUDIO QURAŞDIR
+────────────────────────────────────────────────────
+Bu, bir dəfəlik quraşdırmadır (bir neçə GB, internet lazımdır).
+
+  1) Android Studio yüklə və qur:
+        https://developer.android.com/studio
+     Quraşdırarkən "Android SDK" avtomatik gəlir.
+     İlk açılışda soruşsa, standart (Standard) quraşdırmanı seç.
+
+  2) Flutter SDK yüklə:
+        https://docs.flutter.dev/get-started/install/windows
+     - "flutter_windows_....zip" faylını yüklə.
+     - Onu aç və qovluğu   C:\flutter   ünvanına köçür.
+       (yəni C:\flutter\bin\flutter.bat olmalıdır)
+
+  3) PATH-ə əlavə et:
+     - Windows axtarışında "environment variables" yaz →
+       "Edit the system environment variables" → Environment Variables →
+       "Path" seç → Edit → New →   C:\flutter\bin   yaz → OK.
+
+  4) Yeni bir cmd pəncərəsi aç və yoxla:
+        flutter doctor
+     Çıxan siyahıda Android tərəfində ✓ olmalıdır.
+     "Android licenses" barədə xəbərdarlıq çıxsa, bunu işlət:
+        flutter doctor --android-licenses
+     və hər sualı "y" ilə təsdiqlə.
+
+
+────────────────────────────────────────────────────
+ADDIM 2 — LAYİHƏNİ QUR (bu qovluqda)
+────────────────────────────────────────────────────
+  • Bu qovluqdakı   SETUP.bat   faylına iki dəfə klik et.
+    (Platforma qovluqlarını yaradır, kodu yerinə qoyur,
+     AndroidManifest-i hazırlayır, paketləri yükləyir.)
+
+  • Sonda "HAZIR!" yazısını görməlisən.
+
+
+────────────────────────────────────────────────────
+ADDIM 3 — SERVER ÜNVANINI TƏYİN ET (ən vacib addım)
+────────────────────────────────────────────────────
+Tətbiq məlumatları backend serverindən (Go, port 8080) çəkir.
+Telefon "localhost"-u tanımır — kompüterin lokal IP-si lazımdır.
+
+  1) Kompüterdə cmd aç, yaz:   ipconfig
+     "IPv4 Address" sətrini tap, məs:  192.168.1.35
+
+  2) İki yoldan biri ilə ünvanı ver:
+     A) app_src\lib\config.dart faylını aç,
+        kDefaultHost sətrini dəyiş:
+           const String kDefaultHost = 'http://192.168.1.35:8080';
+        (öz IP-nlə) → sonra yenidən SETUP.bat işlət (və ya
+        flutter build/run et).
+     B) Və ya tətbiqi aç, ANA səhifədə LOQONUN üstünə
+        UZUN BAS (long-press) → açılan pəncərəyə ünvanı yaz.
+
+  3) Telefon və kompüter EYNİ Wi-Fi-də olmalıdır.
+  4) Kompüterdə backend işləməlidir (əsas start.bat işlədilib).
+
+
+────────────────────────────────────────────────────
+ADDIM 4 — TELEFONDA İŞLƏT / APK DÜZƏLT
+────────────────────────────────────────────────────
+CANLI İŞLƏTMƏK (tövsiyə — dəyişiklik dərhal görünür):
+  1) Telefonda "Developer options" → "USB debugging" aç.
+  2) Telefonu USB ilə qoş, "Allow" de.
+  3) Bu qovluqda cmd aç, yaz:   flutter run
+
+APK DÜZƏLTMƏK (telefona atmaq üçün):
+  1) Bu qovluqda cmd aç, yaz:   flutter build apk
+  2) Hazır fayl:
+       build\app\outputs\flutter-apk\app-release.apk
+  3) Bu faylı telefona köçür və aç (quraşdır).
+     Not: telefon "naməlum mənbə" (unknown sources) icazəsi istəyə bilər.
+
+
+────────────────────────────────────────────────────
+iOS (iPhone) HAQQINDA
+────────────────────────────────────────────────────
+Kod eynidir (iOS + Android üçün yazılıb), amma iPhone üçün
+tətbiq düzəltmək YALNIZ Mac kompüterdə mümkündür (Xcode lazımdır).
+Windows-da iOS build alınmır. Mac tapılanda bu qovluğu ora köçürüb
+"flutter build ios" ilə düzəltmək olar.
+
+
+────────────────────────────────────────────────────
+XƏTA ÇIXSA
+────────────────────────────────────────────────────
+• "Serverə qoşulmaq alınmadı":
+    - IP düzdürmü? (ipconfig) Backend işləyirmi? Eyni Wi-Fi?
+    - config.dart-dakı ünvan  http://IP:8080  formatında olmalıdır.
+• Şəkillər gəlmir, siyahı boşdur:
+    - Backend işləmir, ya da IP səhvdir.
+• "flutter tapilmadi":
+    - PATH-ə C:\flutter\bin əlavə olunmayıb (Addım 1.3).
+• flutter doctor Android-də X göstərir:
+    - Android Studio-nu bir dəfə aç, SDK yüklənməsini gözlə,
+      sonra:  flutter doctor --android-licenses
+
+────────────────────────────────────────────────────
+QISA XÜLASƏ (növbəti dəfələr üçün)
+────────────────────────────────────────────────────
+  flutter run          → telefonda işlət
+  flutter build apk    → APK düzəlt

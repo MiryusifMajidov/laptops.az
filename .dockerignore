@@ -1,0 +1,16 @@
+# build artefaktları və lokal fayllar image-ə düşməsin
+**/node_modules
+**/dist
+# Flutter mobil tətbiq və APK-lar backend image-ə lazım deyil (deploy-u ~1GB yavaşladırdı)
+mobile
+*.apk
+*.aab
+backend/web
+backend/backups
+backend/laptops-backend
+backend/laptops-backend.exe
+*.log
+.git
+.vscode
+.idea
+scratchpad

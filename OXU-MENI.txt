@@ -1,0 +1,45 @@
+====================================================
+  LAPTOPS.AZ — NECƏ İŞƏ SALMALI
+====================================================
+
+QALDIRMAQ (ən asan yol):
+------------------------------------
+1. Bu qovluqdakı  start.bat  faylına iki dəfə klik et.
+2. 3 qara pəncərə açılacaq (Backend, Admin, Sayt) — ONLARI BAĞLAMA,
+   serverlər orada işləyir.
+3. ~10 saniyə sonra brauzer öz-özünə açılacaq:
+      Admin panel : http://localhost:5173   (giriş: admin / admin)
+      Müştəri sayt: http://localhost:5174
+
+DAYANDIRMAQ:
+------------------------------------
+- stop.bat faylına klik et (və ya 3 qara pəncərəni bağla).
+
+
+PORTLAR:
+------------------------------------
+- 8080  → Backend / API
+- 5173  → Admin panel
+- 5174  → Müştəri saytı
+
+
+ƏGƏR XƏTA ÇIXSA:
+------------------------------------
+- "port already in use" / "ünvan məşğuldur":
+      Serverlər artıq işləyir. Əvvəl stop.bat işlət, sonra start.bat.
+- Pəncərə açılıb dərhal bağlanır:
+      Go və ya Node quraşdırılmayıb ola bilər. (Bu kompüterdə quraşdırılıb.)
+
+
+GİRİŞ MƏLUMATLARI:
+------------------------------------
+- admin / admin   → tam admin (audit jurnalını görür)
+- user  / user    → satıcı (audit görmür)
+
+
+QEYD:
+------------------------------------
+- Bütün datalar backend\laptops.db faylında saxlanılır.
+  Bu faylı SİLMƏ — silsən bütün məhsullar/satışlar/sifarişlər gedər.
+- Telefonda saytı yoxlamaq üçün brauzeri daraldıb aç,
+  ya da telefonu eyni Wi-Fi-ə qoşub kompüterin IP-si ilə aç.

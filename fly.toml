@@ -1,0 +1,26 @@
+# Laptops.az — Fly.io konfiqurasiyası
+# App adını dəyişmək istəsən (məs. ad tutulubsa): aşağıdakı "app" sətrini dəyiş.
+app = "laptops-az"
+primary_region = "fra"   # Frankfurt (Azərbaycana yaxın Avropa mərkəzi)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+# Kalıcı disk — bütün data (laptops.db + şəkillər) burada saxlanır, deploy-larda İTMİR.
+[[mounts]]
+  source = "laptops_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true            # http → https avtomatik
+  auto_stop_machines = "stop"   # boşdursa dayanır (qənaət)
+  auto_start_machines = true    # sorğu gələndə özü qalxır
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

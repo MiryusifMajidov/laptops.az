@@ -1,0 +1,57 @@
+# ============ backend ============
+backend/*.db
+backend/laptops.db
+# ^ QEYD: laptops.db ignore olunur. Amma Dockerfile onu SEED kimi COPY edir.
+#   Mac-də clone-dan sonra deploy üçün ya bu faylı ayrıca köçür,
+#   ya da bu 2 sətri sil → 260K-lıq ilkin seed commit olunsun, deploy hazır işləsin.
+backend/laptops-backend          # kompilyasiya olunmuş Go binary
+backend/web/                     # Docker build-də yaranan embed qovluğu (admin+sayt dist)
+backend/imgcache/                # şəkil-proksi keşi — yenidən yaranır
+*.exe
+*.out
+
+# ============ node / admin panel (frontend) + müştəri saytı (website) ============
+node_modules/
+frontend/dist/
+frontend/.vite/
+website/dist/
+website/.vite/
+dist/
+*.local
+
+# ============ Flutter / mobil app ============
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/.pub-cache/
+mobile/.pub/
+mobile/.metadata
+mobile/**/*.iml
+mobile/ios/Flutter/ephemeral/
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/.kotlin/
+
+# ============ secretlər / mühit dəyişənləri ============
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ============ Claude Code ============
+.claude/
+
+# ============ IDE / OS ============
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*.log
