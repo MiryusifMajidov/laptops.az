@@ -58,6 +58,7 @@ func main() {
 	mux.HandleFunc("POST /api/categories", createCategory)
 	mux.HandleFunc("POST /api/attributes", createAttribute)
 	mux.HandleFunc("POST /api/attributes/{id}/options", addOption)
+	mux.HandleFunc("PUT /api/attributes/{id}/options/order", reorderOptions)
 	mux.HandleFunc("POST /api/branches", createBranch)
 	mux.HandleFunc("POST /api/transfers", createTransfer)
 	mux.HandleFunc("POST /api/supplies", createSupply)
@@ -76,6 +77,7 @@ func main() {
 	mux.HandleFunc("DELETE /api/categories/{id}", deleteCategory)
 	mux.HandleFunc("PUT /api/attributes/{id}", updateAttribute)
 	mux.HandleFunc("DELETE /api/attributes/{id}", deleteAttribute)
+	mux.HandleFunc("PUT /api/attribute-options/{id}", updateOption)
 	mux.HandleFunc("DELETE /api/attribute-options/{id}", deleteOption)
 	// auth / rol / audit
 	mux.HandleFunc("POST /api/logout", logout)
@@ -102,6 +104,10 @@ func main() {
 	mux.HandleFunc("PUT /api/email-templates/{id}", updateEmailTemplate)
 	mux.HandleFunc("DELETE /api/email-templates/{id}", deleteEmailTemplate)
 	mux.HandleFunc("POST /api/email/send", sendStockEmail)
+	// admin poçt (info@laptops.az) — kompoz + inbox
+	mux.HandleFunc("POST /api/mail/send", sendComposedMail)
+	mux.HandleFunc("GET /api/mail/inbox", listInbox)
+	mux.HandleFunc("GET /api/mail/inbox/{id}", getInboxMail)
 	mux.HandleFunc("POST /api/backup", backupDB)
 	// çoxdilli — statik mətnlər + dillər (admin)
 	mux.HandleFunc("GET /api/languages", listLanguages)
@@ -141,9 +147,18 @@ func main() {
 	mux.HandleFunc("POST /api/public/orders", publicOrder)
 	mux.HandleFunc("POST /api/public/ai-chat", aiChat) // müştəri AI köməkçisi (Gemini)
 	mux.HandleFunc("POST /api/public/visit", trackVisit) // sayt ziyarəti loglama
+	mux.HandleFunc("GET /api/public/whatsapp", waVerify)  // WhatsApp webhook doğrulama
+	mux.HandleFunc("POST /api/public/whatsapp", waWebhook) // WhatsApp gələn mesaj
+	mux.HandleFunc("GET /api/public/instagram", igVerify)  // Instagram webhook doğrulama
+	mux.HandleFunc("POST /api/public/instagram", igWebhook) // Instagram gələn DM
+	mux.HandleFunc("POST /api/public/mail-in", mailIn)      // Cloudflare Email Worker → gələn mail
 	// yüklənmiş şəkillər (statik)
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir("uploads"))))
-	mux.HandleFunc("GET /img", imgResizeHandler) // şəkil kiçiltmə/keş proksisi (kart/siyahı üçün)
+	mux.HandleFunc("GET /img", imgResizeHandler)
+	// SEO
+	mux.HandleFunc("GET /sitemap.xml", sitemapHandler)
+	mux.HandleFunc("GET /robots.txt", robotsHandler) // şəkil kiçiltmə/keş proksisi (kart/siyahı üçün)
+	mux.HandleFunc("GET /privacy", privacyHandler)    // Google Play məxfilik siyasəti
 
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]string{"status": "ok"})
