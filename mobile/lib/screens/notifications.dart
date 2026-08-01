@@ -86,7 +86,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             const SizedBox(height: 5),
                             Text(n.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: mr(size: 13.5, weight: FontWeight.w600, color: C.ink)),
                             const SizedBox(height: 3),
-                            Text(money(n.price), style: sg(size: 14, weight: FontWeight.w700)),
+                            Row(
+                              children: [
+                                Text(money(n.finalPrice), style: sg(size: 14, weight: FontWeight.w700)),
+                                if (n.hasDiscount) ...[
+                                  const SizedBox(width: 6),
+                                  Text(money(n.price),
+                                      style: mr(size: 11, weight: FontWeight.w500, color: C.muted)
+                                          .copyWith(decoration: TextDecoration.lineThrough)),
+                                ],
+                              ],
+                            ),
                           ],
                         ),
                       ),

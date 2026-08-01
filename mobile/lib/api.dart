@@ -137,15 +137,20 @@ class NotifItem {
   final String name;
   final String cardImage;
   final num price;
+  final num discount;
   final String createdAt;
-  NotifItem({required this.id, required this.name, required this.cardImage, required this.price, required this.createdAt});
+  NotifItem({required this.id, required this.name, required this.cardImage, required this.price, this.discount = 0, required this.createdAt});
   factory NotifItem.fromJson(Map<String, dynamic> j) => NotifItem(
         id: (j['id'] ?? 0) as int,
         name: (j['name'] ?? '').toString(),
         cardImage: (j['card_image'] ?? '').toString(),
         price: (j['price'] ?? 0) as num,
+        discount: (j['discount'] ?? 0) as num,
         createdAt: (j['created_at'] ?? '').toString(),
       );
+
+  bool get hasDiscount => discount > 0 && discount < price;
+  num get finalPrice => hasDiscount ? price - discount : price;
 }
 
 class OrderRef {
