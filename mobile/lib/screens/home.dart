@@ -345,7 +345,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(money(p.price), style: sg(size: 23, weight: FontWeight.w600)),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (p.hasDiscount)
+                              Text(money(p.price),
+                                  style: mr(size: 13, weight: FontWeight.w500, color: C.muted)
+                                      .copyWith(decoration: TextDecoration.lineThrough)),
+                            Text(money(p.finalPrice), style: sg(size: 23, weight: FontWeight.w600)),
+                          ],
+                        ),
                         GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: () => openOrder(context, p), // birbaşa sifariş

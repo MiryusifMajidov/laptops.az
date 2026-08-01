@@ -157,7 +157,13 @@ class _ProductScreenState extends State<ProductScreen> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Text(money(p.price), style: sg(size: 26, weight: FontWeight.w600)),
+                  Text(money(p.finalPrice), style: sg(size: 26, weight: FontWeight.w600)),
+                  if (p.hasDiscount) ...[
+                    const SizedBox(width: 8),
+                    Text(money(p.price),
+                        style: mr(size: 16, weight: FontWeight.w500, color: C.muted)
+                            .copyWith(decoration: TextDecoration.lineThrough)),
+                  ],
                   const SizedBox(width: 11),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),

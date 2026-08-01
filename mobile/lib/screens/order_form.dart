@@ -188,7 +188,17 @@ class _OrderFormScreenState extends State<OrderFormScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          Text(money(p.price), style: sg(size: 17, weight: FontWeight.w600)),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (p.hasDiscount)
+                Text(money(p.price),
+                    style: mr(size: 11, weight: FontWeight.w500, color: C.muted)
+                        .copyWith(decoration: TextDecoration.lineThrough)),
+              Text(money(p.finalPrice), style: sg(size: 17, weight: FontWeight.w600)),
+            ],
+          ),
         ],
       ),
     );

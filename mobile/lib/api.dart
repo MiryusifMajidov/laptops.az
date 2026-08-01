@@ -23,6 +23,7 @@ class Product {
   final String name;
   final String serial;
   final num price;
+  final num discount;
   final String categoryName;
   final String cardImage;
   final List<String> gallery;
@@ -33,6 +34,7 @@ class Product {
     required this.name,
     required this.serial,
     required this.price,
+    this.discount = 0,
     required this.categoryName,
     required this.cardImage,
     required this.gallery,
@@ -68,12 +70,19 @@ class Product {
       name: (j['name'] ?? '').toString(),
       serial: (j['serial'] ?? '').toString(),
       price: (j['price'] ?? 0) as num,
+      discount: (j['discount'] ?? 0) as num,
       categoryName: catName,
       cardImage: (j['card_image'] ?? '').toString(),
       gallery: gal,
       values: vals,
     );
   }
+
+  /// Endirim varmı (₼ ilə, price-dən kiçik)
+  bool get hasDiscount => discount > 0 && discount < price;
+
+  /// Göstəriləcək real qiymət — endirim varsa price - discount
+  num get finalPrice => hasDiscount ? price - discount : price;
 
   /// Adı verilmiş xüsusiyyətin dəyəri (yoxdursa boş sətir).
   String attr(String name) {

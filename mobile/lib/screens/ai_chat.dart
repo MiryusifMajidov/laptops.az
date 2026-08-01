@@ -320,7 +320,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text(money(p.price), style: sg(size: 14, weight: FontWeight.w600)),
+                      Text(money(p.finalPrice), style: sg(size: 14, weight: FontWeight.w600)),
+                      if (p.hasDiscount) ...[
+                        const SizedBox(width: 5),
+                        Text(money(p.price),
+                            style: mr(size: 11, weight: FontWeight.w500, color: C.muted)
+                                .copyWith(decoration: TextDecoration.lineThrough)),
+                      ],
                       const SizedBox(width: 6),
                       Container(
                           width: 5,
