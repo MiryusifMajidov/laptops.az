@@ -23,6 +23,8 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _loading = false;
   Object? _error;
   List<Product> _results = [];
+  int _shown = 15; // infinite-scroll: neçə nəticə render olunub
+  bool _loadingMore = false;
 
   @override
   void initState() {
@@ -66,6 +68,7 @@ class _SearchScreenState extends State<SearchScreen> {
       if (!mounted || _ctrl.text.trim() != term) return;
       setState(() {
         _results = res;
+        _shown = 15; // yeni axtarış → sıfırla
         _loading = false;
       });
     } catch (e) {
@@ -168,22 +171,50 @@ class _SearchScreenState extends State<SearchScreen> {
     if (_results.isEmpty) {
       return EmptyState(t('search.noResult').replaceAll('{q}', _query.trim()));
     }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: Text(t('search.results').replaceAll('{n}', '${_results.length}'),
-              style: mr(size: 11, weight: FontWeight.w700, color: C.muted3, spacing: .8)),
-        ),
-        for (final p in _results) ...[
-          ProductRowCompact(p, onTap: () {
-            Store.I.addSearch(_query.trim());
-            openProduct(context, product: p);
-          }),
-          const SizedBox(height: 10),
+    final shown = _shown < _results.length ? _shown : _results.length;
+    final items = _results.take(shown).toList();
+    final hasMore = shown < _results.length;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (!_loadingMore &&
+            hasMore &&
+            n.metrics.pixels >= n.metrics.maxScrollExtent - 500) {
+          _loadingMore = true;
+          setState(() => _shown += 15);
+          Future.delayed(const Duration(milliseconds: 250), () {
+            if (mounted) _loadingMore = false;
+          });
+        }
+        return false;
+      },
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(t('search.results').replaceAll('{n}', '${_results.length}'),
+                style: mr(size: 11, weight: FontWeight.w700, color: C.muted3, spacing: .8)),
+          ),
+          for (final p in items) ...[
+            ProductRowCompact(p, onTap: () {
+              Store.I.addSearch(_query.trim());
+              openProduct(context, product: p);
+            }),
+            const SizedBox(height: 10),
+          ],
+          if (hasMore)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: C.ink),
+                ),
+              ),
+            ),
         ],
-      ],
+      ),
     );
   }
 

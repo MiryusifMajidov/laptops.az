@@ -21,6 +21,8 @@ class _CategoryScreenState extends State<CategoryScreen> {
   List<Product> _all = [];
   Facets _facets = Facets([], {}, 0, 0);
   Filters _filters = Filters();
+  int _shown = 12; // infinite-scroll: neçə məhsul render olunub
+  bool _loadingMore = false;
 
   @override
   void initState() {
@@ -46,7 +48,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
       current: _filters,
       countFor: _count,
     );
-    if (res != null) setState(() => _filters = res);
+    if (res != null) setState(() { _filters = res; _shown = 12; });
   }
 
   @override
@@ -144,7 +146,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
           if (i == 0) {
             final active = _filters.brands.isEmpty;
             return _chip('${t('cat.all')} ${_all.length}', active, () {
-              setState(() => _filters.brands.clear());
+              setState(() { _filters.brands.clear(); _shown = 12; });
             });
           }
           final b = brands[i - 1];
@@ -156,6 +158,7 @@ class _CategoryScreenState extends State<CategoryScreen> {
               } else {
                 _filters.brands.add(b);
               }
+              _shown = 12;
             });
           });
         },
@@ -189,13 +192,44 @@ class _CategoryScreenState extends State<CategoryScreen> {
     if (items.isEmpty) {
       return EmptyState(t('cat.noMatch'));
     }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
-      itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) => ProductRow(
-        items[i],
-        onTap: () => openProduct(context, product: items[i]),
+    final shown = _shown < items.length ? _shown : items.length;
+    final hasMore = shown < items.length;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        // sona 500px qalmış növbəti dəstəni yüklə (avtomatik infinite-scroll)
+        if (!_loadingMore &&
+            hasMore &&
+            n.metrics.pixels >= n.metrics.maxScrollExtent - 500) {
+          _loadingMore = true;
+          setState(() => _shown += 12);
+          Future.delayed(const Duration(milliseconds: 250), () {
+            if (mounted) _loadingMore = false;
+          });
+        }
+        return false;
+      },
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+        itemCount: shown + (hasMore ? 1 : 0),
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, i) {
+          if (i >= shown) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: C.ink),
+                ),
+              ),
+            );
+          }
+          return ProductRow(
+            items[i],
+            onTap: () => openProduct(context, product: items[i]),
+          );
+        },
       ),
     );
   }

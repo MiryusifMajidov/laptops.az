@@ -25,6 +25,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late Future<_HomeData> _future;
   int _newestId = 0; // ən yeni məhsulun id-si (bildiriş qırmızı nöqtəsi üçün)
   final AudioPlayer _player = AudioPlayer();
+  int _shown = 8; // infinite-scroll: "populyar" grid-də neçə məhsul render olunub
+  bool _loadingMore = false;
 
   @override
   void initState() {
@@ -60,7 +62,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refresh() async {
     final data = await _load();
-    if (mounted) setState(() => _future = Future.value(data));
+    if (mounted) setState(() {
+      _future = Future.value(data);
+      _shown = 8;
+    });
   }
 
   // Tətbiq AÇIQ ikən yeni məhsul push-u gəldi — SƏHİFƏNİ YENİLƏMƏDƏN yuxarıda popup + səs.
@@ -240,14 +245,29 @@ class _HomeScreenState extends State<HomeScreen> {
     final hero = _pickHero(data); // böyük kart — Site Settings-də seçilmiş məhsul
     final popular = data.products.where((p) => p.id != hero.id).toList();
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        _searchBar(),
-        _hero(hero),
-        if (data.cats.isNotEmpty) _catChips(data.cats),
-        if (popular.isNotEmpty) _popular(popular), // hero məhsulu təkrar göstərmə
-      ],
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        // sona 500px qalmış növbəti dəstəni yüklə (avtomatik infinite-scroll)
+        if (!_loadingMore &&
+            _shown < popular.length &&
+            n.metrics.pixels >= n.metrics.maxScrollExtent - 500) {
+          _loadingMore = true;
+          setState(() => _shown += 8);
+          Future.delayed(const Duration(milliseconds: 250), () {
+            if (mounted) _loadingMore = false;
+          });
+        }
+        return false;
+      },
+      child: ListView(
+        padding: const EdgeInsets.only(bottom: 24),
+        children: [
+          _searchBar(),
+          _hero(hero),
+          if (data.cats.isNotEmpty) _catChips(data.cats),
+          if (popular.isNotEmpty) _popular(popular), // hero məhsulu təkrar göstərmə
+        ],
+      ),
     );
   }
 
@@ -415,7 +435,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _popular(List<Product> items) {
+  Widget _popular(List<Product> all) {
+    final shown = _shown < all.length ? _shown : all.length;
+    final items = all.take(shown).toList();
+    final hasMore = shown < all.length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       child: Column(
@@ -439,6 +462,17 @@ class _HomeScreenState extends State<HomeScreen> {
               onOrder: () => openOrder(context, items[i]),
             ),
           ),
+          if (hasMore)
+            const Padding(
+              padding: EdgeInsets.only(top: 18),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: C.ink),
+                ),
+              ),
+            ),
         ],
       ),
     );
