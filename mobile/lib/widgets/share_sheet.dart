@@ -14,7 +14,7 @@ import 'net_image.dart';
 String _productUrl(Product p) => '${AppConfig.host}/mehsul/${p.id}';
 
 /// Məhsulun paylaşıldığı sətir (ad + qiymət + sayt linki).
-String _shareText(Product p) => '${p.name} — ${money(p.price)}\n${_productUrl(p)}';
+String _shareText(Product p) => '${p.name} — ${money(p.finalPrice)}\n${_productUrl(p)}';
 
 /// APP07 — «Paylaş» bottom sheet. Link kopyala / OS paylaşım / SMS / E-poçt / AI.
 void showShareSheet(BuildContext context, Product product) {
@@ -157,7 +157,14 @@ class _ShareSheetState extends State<_ShareSheet> {
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Text(money(p.price), style: sg(size: 13, weight: FontWeight.w600, color: C.muted2)),
+                    Text(money(p.finalPrice),
+                        style: sg(size: 13, weight: FontWeight.w600, color: C.muted2)),
+                    if (p.hasDiscount) ...[
+                      const SizedBox(width: 6),
+                      Text(money(p.price),
+                          style: mr(size: 11, weight: FontWeight.w500, color: C.muted3)
+                              .copyWith(decoration: TextDecoration.lineThrough)),
+                    ],
                     const SizedBox(width: 8),
                     const AvailableTag(compact: true),
                   ],

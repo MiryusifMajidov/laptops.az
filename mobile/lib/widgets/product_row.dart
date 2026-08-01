@@ -48,7 +48,17 @@ class ProductRow extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(money(p.price), style: sg(size: 17, weight: FontWeight.w600)),
+                      Row(
+                        children: [
+                          Text(money(p.finalPrice), style: sg(size: 17, weight: FontWeight.w600)),
+                          if (p.hasDiscount) ...[
+                            const SizedBox(width: 7),
+                            Text(money(p.price),
+                                style: mr(size: 12, weight: FontWeight.w500, color: C.muted)
+                                    .copyWith(decoration: TextDecoration.lineThrough)),
+                          ],
+                        ],
+                      ),
                       const AvailableTag(),
                     ],
                   ),
@@ -96,7 +106,18 @@ class ProductRowCompact extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: mr(size: 14, weight: FontWeight.w700, color: C.ink)),
                   const SizedBox(height: 2),
-                  Text(money(p.price), style: sg(size: 13, weight: FontWeight.w600, color: C.muted2)),
+                  Row(
+                    children: [
+                      Text(money(p.finalPrice),
+                          style: sg(size: 13, weight: FontWeight.w600, color: C.muted2)),
+                      if (p.hasDiscount) ...[
+                        const SizedBox(width: 6),
+                        Text(money(p.price),
+                            style: mr(size: 11, weight: FontWeight.w500, color: C.muted3)
+                                .copyWith(decoration: TextDecoration.lineThrough)),
+                      ],
+                    ],
+                  ),
                 ],
               ),
             ),

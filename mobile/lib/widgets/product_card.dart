@@ -48,10 +48,16 @@ class ProductCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 6),
+                      if (p.hasDiscount)
+                        Text(money(p.price),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: mr(size: 10.5, weight: FontWeight.w500, color: C.muted)
+                                .copyWith(decoration: TextDecoration.lineThrough)),
                       Row(
                         children: [
                           Flexible(
-                            child: Text(money(p.price),
+                            child: Text(money(p.finalPrice),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: sg(size: 15, weight: FontWeight.w600)),
