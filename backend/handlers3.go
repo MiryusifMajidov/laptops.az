@@ -146,21 +146,22 @@ func createCategory(w http.ResponseWriter, r *http.Request) {
 	for _, aid := range in.AttributeIDs {
 		db.Exec("INSERT INTO category_attributes (category_id, attribute_id) VALUES (?, ?)", c.ID, aid)
 	}
-	db.Preload("Attributes.Options").First(&c, c.ID)
+	db.Preload("Attributes.Options", optOrder).First(&c, c.ID)
 	writeJSON(w, 201, c)
 }
 
 // POST /api/attributes  {name, options:[]}
 func createAttribute(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Name    string   `json:"name"`
-		Options []string `json:"options"`
+		Name        string   `json:"name"`
+		Multiselect bool     `json:"multiselect"`
+		Options     []string `json:"options"`
 	}
 	if err := decodeBody(r, &in); err != nil || in.Name == "" {
 		writeJSON(w, 400, map[string]string{"error": "ad vacibdir"})
 		return
 	}
-	a := Attribute{Name: in.Name}
+	a := Attribute{Name: in.Name, Multiselect: in.Multiselect, ShowOnSite: true}
 	for _, o := range in.Options {
 		if v := strings.TrimSpace(o); v != "" {
 			a.Options = append(a.Options, AttributeOption{Value: v})
@@ -178,7 +179,9 @@ func addOption(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "dəyər vacibdir"})
 		return
 	}
-	o := AttributeOption{AttributeID: uint(id), Value: in.Value}
+	var maxPos int
+	db.Model(&AttributeOption{}).Where("attribute_id = ?", id).Select("COALESCE(MAX(position),0)").Scan(&maxPos)
+	o := AttributeOption{AttributeID: uint(id), Value: in.Value, Position: maxPos + 1} // sona əlavə olunsun
 	db.Create(&o)
 	writeJSON(w, 201, o)
 }

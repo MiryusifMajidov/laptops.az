@@ -54,7 +54,7 @@ export const imgURL = (p: string) => (p ? (p.startsWith('http') ? p : HOST + p) 
 // ---- tiplər ----
 export interface Branch { id: number; name: string; is_main: boolean; address: string }
 export interface AttributeOption { id: number; attribute_id: number; value: string }
-export interface Attribute { id: number; name: string; options: AttributeOption[] }
+export interface Attribute { id: number; name: string; multiselect?: boolean; show_on_site?: boolean; options: AttributeOption[] }
 export interface Category { id: number; name: string; attributes: Attribute[] }
 export interface ItemValue { id: number; attribute_id: number; attribute: Attribute; value: string }
 export interface ItemTranslation { lang: string; name: string }
@@ -138,3 +138,6 @@ export const phoneOwner = (customers: Customer[], phone: string, excludeId?: num
 // cari istifadəçi (localStorage-dən)
 export const currentRole = () => localStorage.getItem('role') || 'user'
 export const currentName = () => localStorage.getItem('name') || 'İstifadəçi'
+export const currentBranchId = () => Number(localStorage.getItem('branch_id') || 0)
+export const currentBranchName = () => localStorage.getItem('branch_name') || ''
+export const isAdmin = () => currentRole() === 'admin'

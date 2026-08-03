@@ -14,6 +14,9 @@ export default function Stock({ search = '' }: { search?: string }) {
   const [branch, setBranch] = useState('all')
   const [status, setStatus] = useState('in_stock')
   const [modal, setModal] = useState<{ item?: Item } | null>(null)
+  const [edit, setEdit] = useState<{ id: number; field: 'cost' | 'wholesale_price' | 'sale' } | null>(null)
+  const [f1, setF1] = useState('') // əsas qiymət (alış / optavoy / satış)
+  const [f2, setF2] = useState('') // endirim (yalnız satış hüceyrəsi)
 
   // realizasiyaya verilən cihazlar stokda görünmür (yalnız Realizasiya səhifəsində)
   const list = (items ?? []).filter((i) => i.status !== 'consignment')
@@ -52,6 +55,28 @@ export default function Stock({ search = '' }: { search?: string }) {
     e.stopPropagation()
     try { await api(`/items/${i.id}`, { method: 'PUT', body: JSON.stringify({ show_on_site: !i.show_on_site }) }); bump() } catch { /* ignore */ }
   }
+
+  // sətir üzərində qiymət redaktəsi (modal açmadan) — iki klik → xana
+  function startEdit(i: Item, field: 'cost' | 'wholesale_price' | 'sale', e: React.MouseEvent) {
+    e.stopPropagation()
+    setEdit({ id: i.id, field })
+    if (field === 'cost') setF1(i.cost ? String(i.cost) : '')
+    else if (field === 'wholesale_price') setF1(i.wholesale_price ? String(i.wholesale_price) : '')
+    else { setF1(i.price ? String(i.price) : ''); setF2(i.discount ? String(i.discount) : '') }
+  }
+  async function saveEdit(i: Item) {
+    if (!edit || edit.id !== i.id) return
+    const body: Record<string, number> = {}
+    if (edit.field === 'cost') body.cost = Number(f1) || 0
+    else if (edit.field === 'wholesale_price') body.wholesale_price = Number(f1) || 0
+    else { body.price = Number(f1) || 0; body.discount = Number(f2) || 0 }
+    setEdit(null)
+    try { await api(`/items/${i.id}`, { method: 'PUT', body: JSON.stringify(body) }); bump() } catch { /* ignore */ }
+  }
+  const editInputProps = (i: Item) => ({
+    onClick: (e: React.MouseEvent) => e.stopPropagation(),
+    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter') saveEdit(i); if (e.key === 'Escape') setEdit(null) },
+  })
 
   return (
     <div className="content">
@@ -110,14 +135,28 @@ export default function Stock({ search = '' }: { search?: string }) {
                     <td><div className="prod">{i.name}{i.quantity > 1 && <span className="pill" style={{ marginLeft: 6, background: 'var(--card)', border: '1px solid var(--line)', fontWeight: 700 }}>{i.quantity} ədəd</span>}</div><div className="ser">{i.serial || '—'}</div><div className="attrchips">{i.values?.map((v) => <span key={v.id} className="attr">{v.value}</span>)}</div></td>
                     <td>{i.category?.name}</td>
                     <td>{i.branch?.name}</td>
-                    <td className="tright cost data">{money(i.cost)}</td>
-                    <td className="tright data" style={{ color: 'var(--muted)' }}>{i.wholesale_price ? money(i.wholesale_price) : '—'}</td>
-                    <td className="tright data" style={{ fontWeight: 600 }}>
-                      {i.price
-                        ? (i.discount > 0 && i.discount < i.price
-                          ? <>{money(i.price - i.discount)}<div className="tiny" style={{ fontWeight: 500 }}><span style={{ textDecoration: 'line-through', color: 'var(--muted)' }}>{money(i.price)}</span> <span style={{ color: 'var(--bad)' }}>−{money(i.discount)}</span></div></>
-                          : money(i.price))
-                        : '—'}
+                    <td className="tright cost data" style={{ cursor: 'text' }} title="İki klik → redaktə" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => startEdit(i, 'cost', e)}>
+                      {edit?.id === i.id && edit.field === 'cost'
+                        ? <input autoFocus type="number" className="data" style={{ width: 78, textAlign: 'right' }} value={f1} onChange={(e) => setF1(e.target.value)} onBlur={() => saveEdit(i)} {...editInputProps(i)} />
+                        : money(i.cost)}
+                    </td>
+                    <td className="tright data" style={{ color: 'var(--muted)', cursor: 'text' }} title="İki klik → redaktə" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => startEdit(i, 'wholesale_price', e)}>
+                      {edit?.id === i.id && edit.field === 'wholesale_price'
+                        ? <input autoFocus type="number" className="data" style={{ width: 78, textAlign: 'right' }} value={f1} onChange={(e) => setF1(e.target.value)} onBlur={() => saveEdit(i)} {...editInputProps(i)} />
+                        : (i.wholesale_price ? money(i.wholesale_price) : '—')}
+                    </td>
+                    <td className="tright data" style={{ fontWeight: 600, cursor: 'text' }} title="İki klik → satış + endirim" onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => startEdit(i, 'sale', e)}>
+                      {edit?.id === i.id && edit.field === 'sale'
+                        ? <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                            <input autoFocus type="number" className="data" style={{ width: 66, textAlign: 'right' }} placeholder="satış" title="Satış qiyməti" value={f1} onChange={(e) => setF1(e.target.value)} {...editInputProps(i)} />
+                            <input type="number" className="data" style={{ width: 58, textAlign: 'right' }} placeholder="endirim" title="Endirim (₼)" value={f2} onChange={(e) => setF2(e.target.value)} {...editInputProps(i)} />
+                            <button className="btn primary sm" style={{ padding: '3px 8px' }} title="Yadda saxla" onClick={(e) => { e.stopPropagation(); saveEdit(i) }}>✓</button>
+                          </div>
+                        : (i.price
+                          ? (i.discount > 0 && i.discount < i.price
+                            ? <>{money(i.price - i.discount)}<div className="tiny" style={{ fontWeight: 500 }}><span style={{ textDecoration: 'line-through', color: 'var(--muted)' }}>{money(i.price)}</span> <span style={{ color: 'var(--bad)' }}>−{money(i.discount)}</span></div></>
+                            : money(i.price))
+                          : '—')}
                     </td>
                     <td><span className={'pill ' + STATUS_TAG[i.status]}>{STATUS_AZ[i.status]}{i.status === 'reserved' ? ' · 24s' : ''}</span></td>
                     <td><div className={'tg' + (i.show_on_site ? ' on' : '')} onClick={(e) => toggleSite(i, e)} /></td>

@@ -18,6 +18,7 @@ type Session struct {
 	Username  string    `json:"username"`
 	Role      string    `json:"role"`
 	Name      string    `json:"name"`
+	BranchID  uint      `json:"branch_id"` // restart-dan sonra filial təcridi üçün
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
@@ -30,9 +31,11 @@ type Category struct {
 
 // Attribute — Marka, RAM, SSD, Ekran kartı, Ekran, Vəziyyət…
 type Attribute struct {
-	ID      uint              `gorm:"primaryKey" json:"id"`
-	Name    string            `json:"name"`
-	Options []AttributeOption `json:"options"`
+	ID          uint              `gorm:"primaryKey" json:"id"`
+	Name        string            `json:"name"`
+	Multiselect bool              `json:"multiselect"` // çox seçimli — məhsulda bir neçə option seçmək olar
+	ShowOnSite  bool              `gorm:"default:true" json:"show_on_site"` // saytda/mobil appda göstərilsin (default: bəli)
+	Options     []AttributeOption `json:"options"`
 }
 
 // AttributeOption — bir xüsusiyyətin seçimləri (RAM: 8/16/32 GB…)
@@ -40,6 +43,7 @@ type AttributeOption struct {
 	ID          uint   `gorm:"primaryKey" json:"id"`
 	AttributeID uint   `json:"attribute_id"`
 	Value       string `json:"value"`
+	Position    int    `json:"position"` // sıralama (kiçik = əvvəl); 0 = sırasız → id ilə düzülür
 }
 
 // Item — BİR fiziki cihaz. Stok və satış eyni qeyddir; status dəyişir.

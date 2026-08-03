@@ -26,6 +26,7 @@ export default function NewSaleDrawer({ onClose, prefill, orderId, orderInfo }: 
   const [channel, setChannel] = useState('cash')
   const [warranty, setWarranty] = useState('')
   const [creditOpen, setCreditOpen] = useState(false)
+  const [quickOpen, setQuickOpen] = useState(false) // stokda yoxdursa — tez məhsul yarat
   const [saving, setSaving] = useState(false)
 
   const results = useMemo(() => {
@@ -87,6 +88,10 @@ export default function NewSaleDrawer({ onClose, prefill, orderId, orderInfo }: 
                   </div>
                 ))}
               </div>
+              <button className="btn ghost sm" style={{ marginTop: 10, width: '100%' }} onClick={() => setQuickOpen(true)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" style={{ marginRight: 5 }}><path d="M12 5v14M5 12h14" /></svg>
+                Stokda yoxdur → yeni məhsul yarat
+              </button>
             </div>
           )}
 
@@ -151,6 +156,26 @@ export default function NewSaleDrawer({ onClose, prefill, orderId, orderInfo }: 
             { name: 'next_due', label: 'Növbəti ödəniş tarixi', type: 'date' },
           ]}
           onSubmit={async (v) => { await doSale(v) }}
+        />
+      )}
+
+      {quickOpen && (
+        <FormModal
+          title="Yeni məhsul (tez)" subtitle="stokda yoxdursa — yalnız ad, alış və satış" submitLabel="Yarat və seç" onClose={() => setQuickOpen(false)}
+          fields={[
+            { name: 'name', label: 'Məhsulun adı', required: true, full: true, placeholder: 'məs. Lenovo IdeaPad Slim 3' },
+            { name: 'cost', label: 'Alış qiyməti (₼)', type: 'number', required: true, placeholder: '0' },
+            { name: 'price', label: 'Satış qiyməti (₼)', type: 'number', required: true, placeholder: '0' },
+          ]}
+          onSubmit={async (v) => {
+            const created = await api<Item>('/items', { method: 'POST', body: JSON.stringify({ name: v.name, cost: Number(v.cost) || 0, price: Number(v.price) || 0, quantity: 1 }) })
+            bump()
+            setPicked(created)
+            setQty('1')
+            setPrice(created.price ? String(created.price) : String(v.price || ''))
+            setQuickOpen(false)
+            toast('Yeni məhsul yaradıldı və seçildi')
+          }}
         />
       )}
     </>

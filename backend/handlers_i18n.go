@@ -62,6 +62,16 @@ func applyItemLang(it *Item, lang, def string) {
 	it.Translations = nil
 	it.Cost = 0
 	it.WholesalePrice = 0
+	// saytda göstərilməsi söndürülmüş xüsusiyyətləri çıxar (admin görür, müştəri yox)
+	if len(it.Values) > 0 {
+		kept := it.Values[:0]
+		for _, v := range it.Values {
+			if v.Attribute.ShowOnSite {
+				kept = append(kept, v)
+			}
+		}
+		it.Values = kept
+	}
 }
 
 // ---- PUBLIC (sayt üçün, auth yoxdur) ----
