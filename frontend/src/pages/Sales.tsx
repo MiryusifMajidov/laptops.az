@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { api, type Category, type Sale, type Branch, CHANNEL_AZ, isAdmin, currentBranchName } from '../api'
+import { api, type Category, type Sale, type Item, type Branch, CHANNEL_AZ, isAdmin, currentBranchName } from '../api'
 import { useFetch } from '../lib/hooks'
 import { useToast } from '../lib/toast'
 import { useRefresh } from '../lib/refresh'
@@ -18,7 +18,7 @@ export default function Sales() {
   const [ch, setCh] = useState('all')
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<Sale | null>(null)
-  const [confirming, setConfirming] = useState<Sale | null>(null) // təsdiq gözləyən satış
+  const [confirming, setConfirming] = useState<Item | null>(null) // təsdiq gözləyən cihaz (status=satıldı)
   const [selDays, setSelDays] = useState<Set<string>>(new Set())
   const admin = isAdmin()
   const [branch, setBranch] = useState('all') // yalnız admin dəyişir; satıcı öz filialına kilidlidir (backend məcbur edir)
@@ -33,7 +33,9 @@ export default function Sales() {
   if (admin && branch !== 'all') qs.set('branch_id', branch)
   const { data: sales } = useFetch<Sale[]>('/sales?' + qs.toString(), [key, page, cat, ch, q, branch])
   const list = sales ?? []
-  const pending = list.filter((s) => s.pending) // status «satıldı» → təsdiq gözləyir (ən üstdə)
+  // təsdiq gözləyənlər — statusu «satıldı», amma hələ satışı olmayan cihazlar (məhsullar cədvəlindən)
+  const { data: pendingData } = useFetch<Item[]>('/sales/pending', [key])
+  const pending = pendingData ?? []
 
   // KPI kartları — filtrə uyğun BÜTÜN satışların cəmi (səhifədən asılı deyil)
   const sumQs = new URLSearchParams()
@@ -47,7 +49,6 @@ export default function Sales() {
   const groups = useMemo(() => {
     const m = new Map<string, Sale[]>()
     for (const s of list) {
-      if (s.pending) continue // təsdiq gözləyənlər ayrıca yuxarıda göstərilir
       const day = (s.sold_at || '').slice(0, 10)
       if (!m.has(day)) m.set(day, [])
       m.get(day)!.push(s)
@@ -115,13 +116,13 @@ export default function Sales() {
           <table>
             <thead><tr><th>Məhsul</th><th>Seriya</th><th>Filial</th><th className="tright">Alış</th><th className="tright">Əməliyyat</th></tr></thead>
             <tbody>
-              {pending.map((s) => (
-                <tr key={s.id}>
-                  <td className="prod" style={{ fontSize: 13 }}>{s.item?.name ?? '—'}</td>
-                  <td className="ser">{s.item?.serial || '—'}</td>
-                  <td>{s.item?.branch?.name ?? '—'}</td>
-                  <td className="tright cost data">{money(s.item?.cost ?? 0)}</td>
-                  <td className="tright"><button className="btn primary sm" onClick={() => setConfirming(s)}>Təsdiqlə →</button></td>
+              {pending.map((it) => (
+                <tr key={it.id}>
+                  <td className="prod" style={{ fontSize: 13 }}>{it.name}</td>
+                  <td className="ser">{it.serial || '—'}</td>
+                  <td>{it.branch?.name ?? '—'}</td>
+                  <td className="tright cost data">{money(it.cost)}</td>
+                  <td className="tright"><button className="btn primary sm" onClick={() => setConfirming(it)}>Təsdiqlə →</button></td>
                 </tr>
               ))}
             </tbody>
@@ -214,11 +215,11 @@ export default function Sales() {
 
       {confirming && (
         <FormModal
-          title="Satışı təsdiqlə" subtitle={`${confirming.item?.name ?? ''} · alış ${money(confirming.item?.cost ?? 0)}`} submitLabel="Təsdiqlə" onClose={() => setConfirming(null)}
+          title="Satışı təsdiqlə" subtitle={`${confirming.name} · alış ${money(confirming.cost)}`} submitLabel="Təsdiqlə" onClose={() => setConfirming(null)}
           fields={[
-            { name: 'sale_price', label: `Satış qiyməti (₼) — sayt qiyməti: ${money(confirming.item?.price ?? 0)}`, type: 'number', required: true, full: true, placeholder: 'əl ilə yazın' },
+            { name: 'sale_price', label: `Satış qiyməti (₼) — sayt qiyməti: ${money(confirming.price ?? 0)}`, type: 'number', required: true, full: true, placeholder: 'əl ilə yazın' },
           ]}
-          onSubmit={async (v) => { await api(`/sales/${confirming.id}/confirm`, { method: 'PUT', body: JSON.stringify({ sale_price: Number(v.sale_price) || 0 }) }); bump(); toast('Satış təsdiqləndi'); setConfirming(null) }}
+          onSubmit={async (v) => { await api('/sales/confirm', { method: 'POST', body: JSON.stringify({ item_id: confirming.id, sale_price: Number(v.sale_price) || 0 }) }); bump(); toast('Satış təsdiqləndi'); setConfirming(null) }}
         />
       )}
     </div>

@@ -70,7 +70,6 @@ export interface Customer { id: number; name: string; phone: string }
 export interface Sale {
   id: number; item: Item; sale_price: number; quantity: number; profit: number
   channel: string; customer?: Customer; warranty_months: number; sold_at: string
-  pending?: boolean // status «satıldı» edilib, təsdiq (qiymət) gözləyir
 }
 export interface CreditPayment { id: number; credit_plan_id: number; amount: number; created_at: string }
 export interface Credit {

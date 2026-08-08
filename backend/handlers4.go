@@ -84,9 +84,6 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 	if in.BranchID != nil {
 		updates["branch_id"] = *in.BranchID
 	}
-	// status keçidini yadda saxla (item.Status hələ KÖHNƏ dəyərdir — map update struct-a yazmır)
-	statusToSold := in.Status != nil && *in.Status == "sold" && item.Status != "sold"
-	statusLeftSold := in.Status != nil && *in.Status != "sold" && item.Status == "sold"
 	if in.Status != nil {
 		updates["status"] = *in.Status
 	}
@@ -104,25 +101,6 @@ func updateItem(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(updates) > 0 {
 		db.Model(&item).Updates(updates)
-	}
-	// status → «satıldı»: təsdiq gözləyən satış yarat (bu cihaz üçün satış yoxdursa).
-	// status «satıldı»dan çıxdı: yalnız TƏSDİQLƏNMƏMİŞ satışı sil (real satışa toxunma).
-	if statusToSold {
-		var cnt int64
-		db.Model(&Sale{}).Where("item_id = ?", item.ID).Count(&cnt)
-		if cnt == 0 {
-			qty := item.Quantity
-			if qty < 1 {
-				qty = 1
-			}
-			db.Create(&Sale{
-				ItemID: item.ID, SalePrice: 0, Quantity: qty, Profit: 0,
-				Channel: "cash", BranchID: item.BranchID, SoldAt: time.Now(),
-				Pending: true, Counted: false,
-			})
-		}
-	} else if statusLeftSold {
-		db.Where("item_id = ? AND pending = ?", item.ID, true).Delete(&Sale{})
 	}
 	// satılma tarixi — cihazın satışını yenilə
 	if t, ok := parseDayPtr(in.SoldAt); ok {

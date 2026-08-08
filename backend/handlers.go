@@ -234,11 +234,10 @@ func listSales(w http.ResponseWriter, r *http.Request) {
 	term := r.URL.Query().Get("q")
 	cat := r.URL.Query().Get("category")
 	ch := r.URL.Query().Get("channel")
-	// "sayılan" satışlar + təsdiq gözləyənlər (pending) — pending-lər ən üstdə.
-	// bağlanmamış kredit satışları (counted=false, pending=false) görünmür.
+	// yalnız "sayılan" satışlar — bağlanmamış kredit satışları görünmür.
+	// (təsdiq gözləyənlər satış obyekti deyil — birbaşa GET /api/sales/pending-dən gəlir)
 	q := db.Preload("Item", unscoped).Preload("Item.Category").Preload("Item.Branch").Preload("Customer").
-		Where("sales.counted = ? OR sales.pending = ?", true, true).
-		Order("sales.pending desc, sales.sold_at desc")
+		Where("sales.counted = ?", true).Order("sales.sold_at desc")
 	if term != "" || (cat != "" && cat != "all") {
 		q = q.Joins("JOIN items ON items.id = sales.item_id")
 	}
@@ -261,41 +260,58 @@ func listSales(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, sales)
 }
 
-// PUT /api/sales/{id}/confirm  {sale_price} — təsdiq gözləyən satışı təsdiqlə.
-// Qiymət ƏL İLƏ yazılır; təsdiq anı satış tarixi olur; mənfəət = qiymət − alış.
+// GET /api/sales/pending — statusu «satıldı» olan, lakin hələ satışı olmayan cihazlar
+// (təsdiq gözləyənlər). Satış obyekti DEYİL — birbaşa məhsullar cədvəlindən hesablanır.
+func pendingSaleItems(w http.ResponseWriter, r *http.Request) {
+	q := db.Where("status = ?", "sold").
+		Where("id NOT IN (?)", db.Model(&Sale{}).Select("item_id")).
+		Preload("Category").Preload("Branch").Order("created_at desc")
+	if bid, restricted := branchScope(r); restricted {
+		q = q.Where("branch_id = ?", bid)
+	}
+	var items []Item
+	q.Find(&items)
+	writeJSON(w, 200, items)
+}
+
+// POST /api/sales/confirm  {item_id, sale_price} — statusu «satıldı» olan cihaz üçün
+// REAL satış yaradır (qiymət ƏL İLƏ). Satış tarixi = təsdiq anı; mənfəət = qiymət − alış.
 func confirmSale(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
 	var in struct {
+		ItemID    uint    `json:"item_id"`
 		SalePrice float64 `json:"sale_price"`
 	}
 	if err := decodeBody(r, &in); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "yanlış məlumat"})
 		return
 	}
-	var sale Sale
-	if err := db.First(&sale, id).Error; err != nil {
-		writeJSON(w, 404, map[string]string{"error": "satış tapılmadı"})
+	var item Item
+	if err := db.First(&item, in.ItemID).Error; err != nil {
+		writeJSON(w, 404, map[string]string{"error": "cihaz tapılmadı"})
 		return
 	}
-	if !sale.Pending {
-		writeJSON(w, 409, map[string]string{"error": "bu satış artıq təsdiqlənib"})
+	if item.Status != "sold" {
+		writeJSON(w, 409, map[string]string{"error": "cihaz «satıldı» statusunda deyil"})
 		return
 	}
-	qty := sale.Quantity
+	var cnt int64
+	db.Model(&Sale{}).Where("item_id = ?", item.ID).Count(&cnt)
+	if cnt > 0 {
+		writeJSON(w, 409, map[string]string{"error": "bu cihazın satışı artıq var"})
+		return
+	}
+	qty := item.Quantity
 	if qty < 1 {
 		qty = 1
 	}
-	var cost float64
-	db.Unscoped().Model(&Item{}).Select("cost").Where("id = ?", sale.ItemID).Scan(&cost)
-	db.Model(&sale).Updates(map[string]any{
-		"sale_price": in.SalePrice,
-		"profit":     in.SalePrice - cost*float64(qty),
-		"pending":    false,
-		"counted":    true,
-		"sold_at":    time.Now(), // təsdiq anı = satış tarixi
-	})
-	db.Preload("Item", unscoped).Preload("Item.Category").Preload("Item.Branch").Preload("Customer").First(&sale, sale.ID)
-	writeJSON(w, 200, sale)
+	sale := Sale{
+		ItemID: item.ID, SalePrice: in.SalePrice, Quantity: qty,
+		Profit:  in.SalePrice - item.Cost*float64(qty),
+		Channel: "cash", BranchID: item.BranchID, SoldAt: time.Now(), Counted: true,
+	}
+	db.Create(&sale)
+	db.Preload("Item", unscoped).Preload("Item.Category").Preload("Item.Branch").First(&sale, sale.ID)
+	writeJSON(w, 201, sale)
 }
 
 // GET /api/sales/summary?category=&channel=&q= — filtrə uyğun CƏMİ (səhifələmə yox)
