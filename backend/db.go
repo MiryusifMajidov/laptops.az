@@ -60,6 +60,16 @@ func initDB() {
 	// köhnə "pending satış" obyektlərini sil — təsdiq gözləyənlər artıq birbaşa items
 	// cədvəlindən (status=sold, satışı olmayan) hesablanır, ayrıca satış obyekti yaradılmır.
 	db.Where("pending = ?", true).Delete(&Sale{})
+
+	// BİRDƏFƏLİK: köhnə legacy zibil — qiyməti=0 & alışı=0, satışı olmayan «satıldı»
+	// cihazlar (səhvən sold kimi idxal olunmuş) → silinmişə köçürülür. Marker ilə yalnız
+	// bir dəfə; qiyməti olan real cihazlara TOXUNMUR.
+	if getSetting("junk_sold_cleanup_done") != "1" {
+		res := db.Where("status = ? AND price = 0 AND cost = 0 AND id NOT IN (?)", "sold",
+			db.Model(&Sale{}).Select("item_id")).Delete(&Item{})
+		setSetting("junk_sold_cleanup_done", "1")
+		log.Printf("migrasiya: %d köhnə qiymətsiz «satıldı» cihaz silinmişə köçürüldü", res.RowsAffected)
+	}
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
