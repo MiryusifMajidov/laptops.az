@@ -33,7 +33,7 @@ func publicProducts(w http.ResponseWriter, r *http.Request) {
 func publicProduct(w http.ResponseWriter, r *http.Request) {
 	var it Item
 	if err := db.Preload("Category").Preload("Branch").Preload("Values.Attribute").Preload("Translations").
-		Where("show_on_site = ?", true).First(&it, r.PathValue("id")).Error; err != nil {
+		Where("show_on_site = ? AND status = ?", true, "in_stock").First(&it, r.PathValue("id")).Error; err != nil {
 		writeJSON(w, 404, map[string]string{"error": "məhsul tapılmadı"})
 		return
 	}
