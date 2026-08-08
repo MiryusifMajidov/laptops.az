@@ -260,11 +260,10 @@ func listSales(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, sales)
 }
 
-// GET /api/sales/pending — statusu «satıldı» olan, lakin hələ satışı olmayan cihazlar
-// (təsdiq gözləyənlər). Satış obyekti DEYİL — birbaşa məhsullar cədvəlindən hesablanır.
+// GET /api/sales/pending — statusu «satıldı» olan BÜTÜN cihazlar (filtrsiz).
+// Satış obyekti DEYİL — birbaşa məhsullar cədvəlindən. Admin təsdiqləyir və ya silir.
 func pendingSaleItems(w http.ResponseWriter, r *http.Request) {
 	q := db.Where("status = ?", "sold").
-		Where("id NOT IN (?)", db.Model(&Sale{}).Select("item_id")).
 		Preload("Category").Preload("Branch").Order("created_at desc")
 	if bid, restricted := branchScope(r); restricted {
 		q = q.Where("branch_id = ?", bid)
@@ -290,28 +289,30 @@ func confirmSale(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 404, map[string]string{"error": "cihaz tapılmadı"})
 		return
 	}
-	if item.Status != "sold" {
-		writeJSON(w, 409, map[string]string{"error": "cihaz «satıldı» statusunda deyil"})
-		return
-	}
-	var cnt int64
-	db.Model(&Sale{}).Where("item_id = ?", item.ID).Count(&cnt)
-	if cnt > 0 {
-		writeJSON(w, 409, map[string]string{"error": "bu cihazın satışı artıq var"})
-		return
-	}
 	qty := item.Quantity
 	if qty < 1 {
 		qty = 1
 	}
-	sale := Sale{
-		ItemID: item.ID, SalePrice: in.SalePrice, Quantity: qty,
-		Profit:  in.SalePrice - item.Cost*float64(qty),
-		Channel: "cash", BranchID: item.BranchID, SoldAt: time.Now(), Counted: true,
+	profit := in.SalePrice - item.Cost*float64(qty)
+	// cihaz «satıldı» olmalıdır (təsdiq həm də statusu təsbit edir)
+	if item.Status != "sold" {
+		db.Model(&item).Update("status", "sold")
 	}
-	db.Create(&sale)
+	// mövcud satış varsa yenilə, yoxsa yeni yarat — təsdiq həmişə işləsin
+	var sale Sale
+	if db.Where("item_id = ?", item.ID).First(&sale).Error == nil {
+		db.Model(&sale).Updates(map[string]any{
+			"sale_price": in.SalePrice, "profit": profit, "sold_at": time.Now(), "counted": true,
+		})
+	} else {
+		sale = Sale{
+			ItemID: item.ID, SalePrice: in.SalePrice, Quantity: qty, Profit: profit,
+			Channel: "cash", BranchID: item.BranchID, SoldAt: time.Now(), Counted: true,
+		}
+		db.Create(&sale)
+	}
 	db.Preload("Item", unscoped).Preload("Item.Category").Preload("Item.Branch").First(&sale, sale.ID)
-	writeJSON(w, 201, sale)
+	writeJSON(w, 200, sale)
 }
 
 // GET /api/sales/summary?category=&channel=&q= — filtrə uyğun CƏMİ (səhifələmə yox)

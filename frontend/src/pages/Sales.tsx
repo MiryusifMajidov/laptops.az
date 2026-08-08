@@ -73,6 +73,10 @@ export default function Sales() {
   const margin = sum && sum.turnover > 0 ? ((sum.profit / sum.turnover) * 100).toFixed(1) : '0.0'
   const filtered = cat !== 'all' || ch !== 'all' || q.trim() !== ''
   const reset = (fn: () => void) => { fn(); setPage(0) }
+  async function delItem(it: Item) {
+    if (!window.confirm(`«${it.name}» silinsin? (Silinmiş məhsullar səhifəsinə keçəcək, geri qaytarmaq olar)`)) return
+    try { await api(`/items/${it.id}`, { method: 'DELETE' }); bump(); toast('Silindi') } catch (e) { toast((e as Error).message) }
+  }
 
   return (
     <div className="content">
@@ -109,12 +113,12 @@ export default function Sales() {
         <div className="card" style={{ overflow: 'hidden', border: '1px solid var(--warn)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', background: 'rgba(194,65,12,.08)', borderBottom: '1px solid var(--line)' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-            <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--warn)' }}>Təsdiq gözləyən</span>
+            <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--warn)' }}>Statusu «satıldı» olan cihazlar</span>
             <span className="pill warn">{pending.length}</span>
-            <span className="tiny" style={{ marginLeft: 'auto' }}>Status «satıldı» edilib — pul gəldikdə qiyməti yazıb təsdiqləyin</span>
+            <span className="tiny" style={{ marginLeft: 'auto' }}>Qiyməti yazıb təsdiqləyin, lazımsızları silin</span>
           </div>
           <table>
-            <thead><tr><th>Məhsul</th><th>Seriya</th><th>Filial</th><th className="tright">Alış</th><th className="tright">Əməliyyat</th></tr></thead>
+            <thead><tr><th>Məhsul</th><th>Seriya</th><th>Filial</th><th className="tright">Alış</th><th className="tright">Satış</th><th className="tright">Əməliyyat</th></tr></thead>
             <tbody>
               {pending.map((it) => (
                 <tr key={it.id}>
@@ -122,7 +126,11 @@ export default function Sales() {
                   <td className="ser">{it.serial || '—'}</td>
                   <td>{it.branch?.name ?? '—'}</td>
                   <td className="tright cost data">{money(it.cost)}</td>
-                  <td className="tright"><button className="btn primary sm" onClick={() => setConfirming(it)}>Təsdiqlə →</button></td>
+                  <td className="tright data">{it.price ? money(it.price) : '—'}</td>
+                  <td className="tright" style={{ whiteSpace: 'nowrap' }}>
+                    <button className="btn primary sm" onClick={() => setConfirming(it)}>Təsdiqlə</button>
+                    <button className="btn ghost sm" style={{ marginLeft: 6, color: 'var(--bad)' }} onClick={() => delItem(it)}>Sil</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
