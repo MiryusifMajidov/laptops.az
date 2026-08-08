@@ -57,6 +57,35 @@ func initDB() {
 	seedAuth()
 	seedI18n()
 	seedSettings()
+	backfillPendingSales()
+}
+
+// backfillPendingSales — BİRDƏFƏLİK: artıq statusu «satıldı» olan, lakin heç bir satış
+// qeydi olmayan cihazlar üçün «təsdiq gözləyən» satış yaradır (Satışlarda üstdə görünsün,
+// qiymətini əl ilə təsdiqləyəsiniz). Marker ilə yalnız bir dəfə işləyir.
+func backfillPendingSales() {
+	if getSetting("pending_backfill_done") == "1" {
+		return
+	}
+	var items []Item
+	db.Where("status = ?", "sold").
+		Where("id NOT IN (?)", db.Model(&Sale{}).Select("item_id")).
+		Find(&items)
+	n := 0
+	for _, it := range items {
+		qty := it.Quantity
+		if qty < 1 {
+			qty = 1
+		}
+		db.Create(&Sale{
+			ItemID: it.ID, SalePrice: 0, Quantity: qty, Profit: 0,
+			Channel: "cash", BranchID: it.BranchID, SoldAt: it.CreatedAt,
+			Pending: true, Counted: false,
+		})
+		n++
+	}
+	setSetting("pending_backfill_done", "1")
+	log.Printf("migrasiya: %d satılmış cihaz üçün təsdiq gözləyən satış yaradıldı", n)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
