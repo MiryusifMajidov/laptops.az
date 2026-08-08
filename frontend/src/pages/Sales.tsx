@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { api, type Category, type Sale, CHANNEL_AZ } from '../api'
+import { api, type Category, type Sale, type Branch, CHANNEL_AZ, isAdmin, currentBranchName } from '../api'
 import { useFetch } from '../lib/hooks'
 import { useToast } from '../lib/toast'
 import { useRefresh } from '../lib/refresh'
@@ -18,28 +18,36 @@ export default function Sales() {
   const [ch, setCh] = useState('all')
   const [q, setQ] = useState('')
   const [edit, setEdit] = useState<Sale | null>(null)
+  const [confirming, setConfirming] = useState<Sale | null>(null) // təsdiq gözləyən satış
   const [selDays, setSelDays] = useState<Set<string>>(new Set())
+  const admin = isAdmin()
+  const [branch, setBranch] = useState('all') // yalnız admin dəyişir; satıcı öz filialına kilidlidir (backend məcbur edir)
 
   const { data: cats } = useFetch<Category[]>('/categories', [])
+  const { data: branches } = useFetch<Branch[]>(admin ? '/branches' : null, [])
 
   const qs = new URLSearchParams({ limit: String(PAGE), offset: String(page * PAGE) })
   if (cat !== 'all') qs.set('category', cat)
   if (ch !== 'all') qs.set('channel', ch)
   if (q.trim()) qs.set('q', q.trim())
-  const { data: sales } = useFetch<Sale[]>('/sales?' + qs.toString(), [key, page, cat, ch, q])
+  if (admin && branch !== 'all') qs.set('branch_id', branch)
+  const { data: sales } = useFetch<Sale[]>('/sales?' + qs.toString(), [key, page, cat, ch, q, branch])
   const list = sales ?? []
+  const pending = list.filter((s) => s.pending) // status «satıldı» → təsdiq gözləyir (ən üstdə)
 
   // KPI kartları — filtrə uyğun BÜTÜN satışların cəmi (səhifədən asılı deyil)
   const sumQs = new URLSearchParams()
   if (cat !== 'all') sumQs.set('category', cat)
   if (ch !== 'all') sumQs.set('channel', ch)
   if (q.trim()) sumQs.set('q', q.trim())
-  const { data: sum } = useFetch<{ count: number; turnover: number; profit: number }>('/sales/summary?' + sumQs.toString(), [key, cat, ch, q])
+  if (admin && branch !== 'all') sumQs.set('branch_id', branch)
+  const { data: sum } = useFetch<{ count: number; turnover: number; profit: number }>('/sales/summary?' + sumQs.toString(), [key, cat, ch, q, branch])
 
   // günlərə görə qruplaşdır (backend sold_at desc qaytarır)
   const groups = useMemo(() => {
     const m = new Map<string, Sale[]>()
     for (const s of list) {
+      if (s.pending) continue // təsdiq gözləyənlər ayrıca yuxarıda göstərilir
       const day = (s.sold_at || '').slice(0, 10)
       if (!m.has(day)) m.set(day, [])
       m.get(day)!.push(s)
@@ -83,12 +91,45 @@ export default function Sales() {
           <option value="all">Kanal: Hamısı</option>
           {CH_OPTS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
         </select>
+        {admin ? (
+          <select className="select" value={branch} onChange={(e) => reset(() => setBranch(e.target.value))} style={{ cursor: 'pointer' }} title="Filial üzrə bax">
+            <option value="all">Filial: Hamısı</option>
+            {branches?.map((b) => <option key={b.id} value={String(b.id)}>{b.name}</option>)}
+          </select>
+        ) : (
+          <span className="pill neut" style={{ alignSelf: 'center' }} title="Yalnız öz filialınızın satışları">Filial: {currentBranchName() || '—'}</span>
+        )}
         <div className="miniSearch"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#B0AEA8" strokeWidth={2.2} strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg><input placeholder="Ad və ya seriya…" value={q} onChange={(e) => reset(() => setQ(e.target.value))} /></div>
       </div>
 
       <div className="banner"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 8h.01M11 12h1v4h1" /></svg><div><b>Excel-dəki «продажа» kimi — günlərə bölünmüş.</b> Hər gün ayrıca cədvəldir. Sətrə klik → redaktə. Filtr: kateqoriya, kanal, ad/seriya axtarışı.</div></div>
 
-      {groups.length === 0 && <div className="card"><div className="center-msg">Nəticə yoxdur</div></div>}
+      {pending.length > 0 && (
+        <div className="card" style={{ overflow: 'hidden', border: '1px solid var(--warn)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', background: 'rgba(194,65,12,.08)', borderBottom: '1px solid var(--line)' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" strokeWidth={2} strokeLinecap="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+            <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--warn)' }}>Təsdiq gözləyən</span>
+            <span className="pill warn">{pending.length}</span>
+            <span className="tiny" style={{ marginLeft: 'auto' }}>Status «satıldı» edilib — pul gəldikdə qiyməti yazıb təsdiqləyin</span>
+          </div>
+          <table>
+            <thead><tr><th>Məhsul</th><th>Seriya</th><th>Filial</th><th className="tright">Alış</th><th className="tright">Əməliyyat</th></tr></thead>
+            <tbody>
+              {pending.map((s) => (
+                <tr key={s.id}>
+                  <td className="prod" style={{ fontSize: 13 }}>{s.item?.name ?? '—'}</td>
+                  <td className="ser">{s.item?.serial || '—'}</td>
+                  <td>{s.item?.branch?.name ?? '—'}</td>
+                  <td className="tright cost data">{money(s.item?.cost ?? 0)}</td>
+                  <td className="tright"><button className="btn primary sm" onClick={() => setConfirming(s)}>Təsdiqlə →</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {groups.length === 0 && pending.length === 0 && <div className="card"><div className="center-msg">Nəticə yoxdur</div></div>}
 
       {groups.map(([day, rows]) => {
         const turnover = rows.reduce((a, s) => a + s.sale_price, 0)
@@ -168,6 +209,16 @@ export default function Sales() {
             { name: 'customer_id', label: 'Müştəri', type: 'customer', full: true, placeholder: 'müştəri axtar və ya yeni yarat…' },
           ]}
           onSubmit={async (v) => { const body: Record<string, unknown> = { ...v }; if (!body.customer_id) delete body.customer_id; await api(`/sales/${edit.id}`, { method: 'PUT', body: JSON.stringify(body) }); bump(); toast('Satış yeniləndi'); setEdit(null) }}
+        />
+      )}
+
+      {confirming && (
+        <FormModal
+          title="Satışı təsdiqlə" subtitle={`${confirming.item?.name ?? ''} · alış ${money(confirming.item?.cost ?? 0)}`} submitLabel="Təsdiqlə" onClose={() => setConfirming(null)}
+          fields={[
+            { name: 'sale_price', label: `Satış qiyməti (₼) — sayt qiyməti: ${money(confirming.item?.price ?? 0)}`, type: 'number', required: true, full: true, placeholder: 'əl ilə yazın' },
+          ]}
+          onSubmit={async (v) => { await api(`/sales/${confirming.id}/confirm`, { method: 'PUT', body: JSON.stringify({ sale_price: Number(v.sale_price) || 0 }) }); bump(); toast('Satış təsdiqləndi'); setConfirming(null) }}
         />
       )}
     </div>

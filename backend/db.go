@@ -37,7 +37,7 @@ func initDB() {
 		&OnlineOrder{}, &DailyClose{}, &SupplyBatch{},
 		&User{}, &AuditLog{}, &EmailTemplate{}, &CreditPayment{},
 		&Language{}, &UiString{}, &ItemTranslation{}, &TermTranslation{}, &Setting{},
-		&PartnerApplication{}, &Session{}, &AiConversation{}, &Visit{},
+		&PartnerApplication{}, &Session{}, &AiConversation{}, &Visit{}, &IncomingMail{},
 	); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
@@ -59,6 +59,13 @@ func initDB() {
 	seedSettings()
 }
 
+// optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
+func optOrder(d *gorm.DB) *gorm.DB { return d.Order("position").Order("id") }
+
+// unscoped — preload-da soft-deleted (silinmiş) yazıları da daxil et.
+// Məs. satılmış cihaz sonradan silinsə belə, satış sətrində adı görünsün.
+func unscoped(d *gorm.DB) *gorm.DB { return d.Unscoped() }
+
 func seedAuth() {
 	var n int64
 	db.Model(&User{}).Count(&n)
@@ -69,17 +76,41 @@ func seedAuth() {
 		})
 		log.Println("istifadəçilər yaradıldı: admin/admin (admin), user/user (satıcı)")
 	}
-	// işçi hesabları (satıcı rolu) — additive: yoxdursa yaradılır, mövcud parolu POZMUR
-	emps := []struct{ u, name string }{
-		{"ammar", "Ammar"}, {"nicat", "Nicat"}, {"seyran", "Seyran"}, {"yusif", "Yusif"},
+	// filial id-ləri (satıcıları filiallara bağlamaq üçün)
+	branchID := func(where string, args ...any) uint {
+		var b Branch
+		if db.Where(where, args...).First(&b).Error == nil {
+			return b.ID
+		}
+		return 0
+	}
+	mainB := branchID("is_main = ?", true)
+	zaurB := branchID("name = ?", "Zaur")
+	elcinB := branchID("name LIKE ?", "%Elçin%")
+
+	// işçi hesabları (satıcı rolu) — additive: yoxdursa yaradılır, mövcud parolu POZMUR.
+	// Hər işçi öz filialına bağlıdır (yalnız o filialın satışını görür).
+	emps := []struct {
+		u, name string
+		branch  uint
+	}{
+		{"ammar", "Ammar", mainB}, {"nicat", "Nicat", mainB}, {"seyran", "Seyran", mainB}, {"yusif", "Yusif", mainB},
+		{"zaur", "Zaur", zaurB},     // Zaur filialı — user: zaur / parol: zaur
+		{"elcin", "Elçin", elcinB},  // Elçin & Rəşid filialı — user: elcin / parol: elcin
 	}
 	for _, e := range emps {
-		var c int64
-		db.Model(&User{}).Where("username = ?", e.u).Count(&c)
-		if c == 0 {
-			db.Create(&User{Username: e.u, PassHash: hashPassword(e.u), Role: "user", Name: e.name})
-			log.Printf("işçi hesabı yaradıldı: %s / %s (satıcı)", e.u, e.u)
+		var existing User
+		if db.Where("username = ?", e.u).First(&existing).Error != nil {
+			db.Create(&User{Username: e.u, PassHash: hashPassword(e.u), Role: "user", Name: e.name, BranchID: e.branch})
+			log.Printf("işçi hesabı yaradıldı: %s / %s (satıcı, filial=%d)", e.u, e.u, e.branch)
+		} else if existing.BranchID == 0 && e.branch != 0 {
+			db.Model(&existing).Update("branch_id", e.branch)
+			log.Printf("işçi filialı təyin edildi: %s → filial %d", e.u, e.branch)
 		}
+	}
+	// filialı təyin edilməyən qalan istifadəçilər (admin, user…) → Mərkəz
+	if mainB != 0 {
+		db.Model(&User{}).Where("branch_id = 0 OR branch_id IS NULL").Update("branch_id", mainB)
 	}
 	var m int64
 	db.Model(&EmailTemplate{}).Count(&m)

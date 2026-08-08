@@ -31,6 +31,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 // GET /api/dashboard
 func dashboardHandler(w http.ResponseWriter, r *http.Request) {
+	// filial təcridi — satıcı yalnız öz filialının rəqəmlərini görür; admin hamısını
+	bid, restricted := branchScope(r)
+
+	// stok/anbar bütün filiallara açıqdır (satış üçün lazımdır) — qlobal
 	var stockCount, reservedCount int64
 	var stockValue float64
 	db.Model(&Item{}).Where("status = ?", "in_stock").Count(&stockCount)
@@ -44,9 +48,17 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 
 	var salesCount int64
 	var turnover, profit float64
-	db.Model(&Sale{}).Where("counted = ?", true).Count(&salesCount)
-	db.Model(&Sale{}).Where("counted = ?", true).Select("COALESCE(SUM(sale_price),0)").Scan(&turnover)
-	db.Model(&Sale{}).Where("counted = ?", true).Select("COALESCE(SUM(profit),0)").Scan(&profit)
+	sq1 := db.Model(&Sale{}).Where("counted = ?", true)
+	sq2 := db.Model(&Sale{}).Where("counted = ?", true)
+	sq3 := db.Model(&Sale{}).Where("counted = ?", true)
+	if restricted {
+		sq1 = sq1.Where("branch_id = ?", bid)
+		sq2 = sq2.Where("branch_id = ?", bid)
+		sq3 = sq3.Where("branch_id = ?", bid)
+	}
+	sq1.Count(&salesCount)
+	sq2.Select("COALESCE(SUM(sale_price),0)").Scan(&turnover)
+	sq3.Select("COALESCE(SUM(profit),0)").Scan(&profit)
 
 	var expenses float64
 	db.Model(&Expense{}).Select("COALESCE(SUM(amount),0)").Scan(&expenses)
@@ -56,11 +68,14 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 		Turnover float64 `json:"turnover"`
 	}
 	var byCat []catRow
-	db.Model(&Sale{}).Select("categories.name as name, COALESCE(SUM(sales.sale_price),0) as turnover").
+	catQ := db.Model(&Sale{}).Select("categories.name as name, COALESCE(SUM(sales.sale_price),0) as turnover").
 		Joins("JOIN items ON items.id = sales.item_id").
 		Joins("JOIN categories ON categories.id = items.category_id").
-		Where("sales.counted = ?", true).
-		Group("categories.name").Order("turnover desc").Limit(5).Scan(&byCat)
+		Where("sales.counted = ?", true)
+	if restricted {
+		catQ = catQ.Where("sales.branch_id = ?", bid)
+	}
+	catQ.Group("categories.name").Order("turnover desc").Limit(5).Scan(&byCat)
 
 	writeJSON(w, 200, map[string]any{
 		"stock_count":    stockCount,
@@ -150,6 +165,10 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "yanlış məlumat"})
 		return
 	}
+	// satıcı (admin deyil) yalnız ÖZ filialına məhsul əlavə edə bilər — filial məcburi öz filialı
+	if u, ok := userFromReq(r); ok && u.Role != "admin" && u.BranchID != 0 {
+		in.BranchID = u.BranchID
+	}
 	qty := in.Quantity
 	if qty < 1 {
 		qty = 1
@@ -179,7 +198,7 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 // GET /api/categories
 func listCategories(w http.ResponseWriter, r *http.Request) {
 	var cats []Category
-	db.Preload("Attributes.Options").Find(&cats)
+	db.Preload("Attributes.Options", optOrder).Find(&cats)
 	// xüsusiyyətləri sabit sıraya sal (Marka öndə, Vəziyyət sonda)
 	for i := range cats {
 		sort.SliceStable(cats[i].Attributes, func(a, b int) bool {
@@ -192,7 +211,7 @@ func listCategories(w http.ResponseWriter, r *http.Request) {
 // GET /api/attributes
 func listAttributes(w http.ResponseWriter, r *http.Request) {
 	var attrs []Attribute
-	db.Preload("Options").Find(&attrs)
+	db.Preload("Options", optOrder).Find(&attrs)
 	writeJSON(w, 200, attrs)
 }
 
@@ -215,9 +234,11 @@ func listSales(w http.ResponseWriter, r *http.Request) {
 	term := r.URL.Query().Get("q")
 	cat := r.URL.Query().Get("category")
 	ch := r.URL.Query().Get("channel")
-	// yalnız "sayılan" satışlar — bağlanmamış kredit satışları görünmür
-	q := db.Preload("Item").Preload("Item.Category").Preload("Item.Branch").Preload("Customer").
-		Where("sales.counted = ?", true).Order("sold_at desc")
+	// "sayılan" satışlar + təsdiq gözləyənlər (pending) — pending-lər ən üstdə.
+	// bağlanmamış kredit satışları (counted=false, pending=false) görünmür.
+	q := db.Preload("Item", unscoped).Preload("Item.Category").Preload("Item.Branch").Preload("Customer").
+		Where("sales.counted = ? OR sales.pending = ?", true, true).
+		Order("sales.pending desc, sales.sold_at desc")
 	if term != "" || (cat != "" && cat != "all") {
 		q = q.Joins("JOIN items ON items.id = sales.item_id")
 	}
@@ -231,9 +252,50 @@ func listSales(w http.ResponseWriter, r *http.Request) {
 	if ch != "" && ch != "all" {
 		q = q.Where("sales.channel = ?", ch)
 	}
+	// filial təcridi — satıcı yalnız öz filialının satışını görür; admin hamısını (istəsə seçər)
+	if bid, restricted := branchScope(r); restricted {
+		q = q.Where("sales.branch_id = ?", bid)
+	}
 	var sales []Sale
 	q.Limit(limit).Offset(offset).Find(&sales)
 	writeJSON(w, 200, sales)
+}
+
+// PUT /api/sales/{id}/confirm  {sale_price} — təsdiq gözləyən satışı təsdiqlə.
+// Qiymət ƏL İLƏ yazılır; təsdiq anı satış tarixi olur; mənfəət = qiymət − alış.
+func confirmSale(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var in struct {
+		SalePrice float64 `json:"sale_price"`
+	}
+	if err := decodeBody(r, &in); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "yanlış məlumat"})
+		return
+	}
+	var sale Sale
+	if err := db.First(&sale, id).Error; err != nil {
+		writeJSON(w, 404, map[string]string{"error": "satış tapılmadı"})
+		return
+	}
+	if !sale.Pending {
+		writeJSON(w, 409, map[string]string{"error": "bu satış artıq təsdiqlənib"})
+		return
+	}
+	qty := sale.Quantity
+	if qty < 1 {
+		qty = 1
+	}
+	var cost float64
+	db.Unscoped().Model(&Item{}).Select("cost").Where("id = ?", sale.ItemID).Scan(&cost)
+	db.Model(&sale).Updates(map[string]any{
+		"sale_price": in.SalePrice,
+		"profit":     in.SalePrice - cost*float64(qty),
+		"pending":    false,
+		"counted":    true,
+		"sold_at":    time.Now(), // təsdiq anı = satış tarixi
+	})
+	db.Preload("Item", unscoped).Preload("Item.Category").Preload("Item.Branch").Preload("Customer").First(&sale, sale.ID)
+	writeJSON(w, 200, sale)
 }
 
 // GET /api/sales/summary?category=&channel=&q= — filtrə uyğun CƏMİ (səhifələmə yox)
@@ -255,6 +317,9 @@ func salesSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	if ch != "" && ch != "all" {
 		q = q.Where("sales.channel = ?", ch)
+	}
+	if bid, restricted := branchScope(r); restricted {
+		q = q.Where("sales.branch_id = ?", bid)
 	}
 	var res struct {
 		Count    int64   `json:"count"`

@@ -7,6 +7,7 @@ import { RefreshProvider } from './lib/refresh'
 
 import Dashboard from './pages/Dashboard'
 import Stock from './pages/Stock'
+import DeletedItems from './pages/DeletedItems'
 import Sales from './pages/Sales'
 import Credit from './pages/Credit'
 import Realizasiya from './pages/Realizasiya'
@@ -22,6 +23,7 @@ import Calculator from './pages/Calculator'
 import Login from './pages/Login'
 import Audit from './pages/Audit'
 import MailExcel from './pages/MailExcel'
+import Mail from './pages/Mail'
 import Settings from './pages/Settings'
 import SiteSettings from './pages/SiteSettings'
 import Partners from './pages/Partners'
@@ -39,6 +41,7 @@ const META: Record<View, { title: string; sub: string }> = {
   dashboard: { title: 'Ana Panel', sub: todayAz() },
   satislar: { title: 'Satışlar', sub: 'Excel-i əvəz edən əsas jurnal' },
   stok: { title: 'Stok / Anbar', sub: 'bir mal = bir qeyd · stok və satış eyni bazadan' },
+  silinmis: { title: 'Silinmiş məhsullar', sub: 'stokdan silinən cihazlar · bərpa etmək olar' },
   onlayn: { title: 'Onlayn Sifarişlər', sub: 'saytdan gələn · 24 saat rezerv' },
   kredit: { title: 'Kredit / Borclar', sub: 'ödəniş izləməsi · gecikmə xəbərdarlığı' },
   kassa: { title: 'Kassa', sub: 'gün bağlama · nağd/kart/taksit' },
@@ -52,6 +55,7 @@ const META: Record<View, { title: string; sub: string }> = {
   hesabatlar: { title: 'Hesabatlar', sub: 'İyul 2026 · analitika' },
   kalkulyator: { title: 'Kalkulyator', sub: 'aralıq + filial + kateqoriya → dövriyyə / net qazanc' },
   mail: { title: 'Mail & Excel', sub: 'cari stok Excel-i şablonlara göndər' },
+  poct: { title: 'Poçt', sub: 'info@laptops.az — gələn qutu + göndər' },
   sayt: { title: 'Sayt Tənzimləmələri', sub: 'dillər · sayt mətnləri (çoxdilli)' },
   aisohbet: { title: 'AI söhbətləri', sub: 'sayt + app köməkçi ilə bütün yazışmalar' },
   ziyaretchi: { title: 'Ziyarətçilər', sub: 'sayta girən IP-lər · vaxt · səhifə' },
@@ -61,11 +65,11 @@ const META: Record<View, { title: string; sub: string }> = {
 
 // slug URL sistemi — hər ekranın öz linki (refresh + paylaşım işləyir)
 const SLUGS: Record<View, string> = {
-  dashboard: '/', satislar: '/satislar', stok: '/stok', onlayn: '/onlayn-sifarisler',
+  dashboard: '/', satislar: '/satislar', stok: '/stok', silinmis: '/silinmis-mehsullar', onlayn: '/onlayn-sifarisler',
   kredit: '/kredit', kassa: '/kassa', xercler: '/xercler',
   musteriler: '/musteriler', filiallar: '/filiallar', realizasiya: '/realizasiya',
   techizat: '/techizat', kateqoriya: '/kateqoriyalar', partnyor: '/terefdasliq', hesabatlar: '/hesabatlar',
-  kalkulyator: '/kalkulyator', mail: '/mail', sayt: '/sayt', aisohbet: '/ai-sohbetler', ziyaretchi: '/ziyaretchiler', audit: '/audit', ayarlar: '/tenzimlemeler',
+  kalkulyator: '/kalkulyator', mail: '/mail', poct: '/poct', sayt: '/sayt', aisohbet: '/ai-sohbetler', ziyaretchi: '/ziyaretchiler', audit: '/audit', ayarlar: '/tenzimlemeler',
 }
 // Prod-da panel /admin altında verilir (Vite base '/admin/'); dev-də kökdə.
 // BASE_URL = '/admin/' (prod) və ya '/' (dev). Sonundakı '/' atılır → '/admin' / ''.
@@ -82,6 +86,7 @@ function Page({ view, search }: { view: View; search: string }) {
   switch (view) {
     case 'dashboard': return <Dashboard />
     case 'stok': return <Stock search={search} />
+    case 'silinmis': return <DeletedItems />
     case 'satislar': return <Sales />
     case 'kredit': return <Credit />
     case 'realizasiya': return <Realizasiya />
@@ -96,6 +101,7 @@ function Page({ view, search }: { view: View; search: string }) {
     case 'hesabatlar': return <Reports />
     case 'kalkulyator': return <Calculator />
     case 'mail': return <MailExcel />
+    case 'poct': return <Mail />
     case 'sayt': return <SiteSettings />
     case 'aisohbet': return <AiChats />
     case 'ziyaretchi': return <Visitors />

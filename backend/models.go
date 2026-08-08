@@ -1,6 +1,10 @@
 package main
 
-import "time"
+import (
+	"time"
+
+	"gorm.io/gorm"
+)
 
 // Branch — mağaza / filiallar (Mərkəz, Elçin & Rəşid, Zaur…)
 type Branch struct {
@@ -68,6 +72,9 @@ type Item struct {
 	Values     []ItemAttributeValue `json:"values"`
 	Translations []ItemTranslation  `json:"translations,omitempty"` // məhsul adının dil tərcümələri
 	CreatedAt  time.Time            `json:"created_at"` // alınma / gəlmə tarixi
+	// soft delete — silinən cihaz DB-də qalır (deleted_at dolur), adi sorğulardan çıxır,
+	// «Silinmiş məhsullar» səhifəsində görünür və bərpa oluna bilər.
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 	// satılan cihaz üçün satış tarixi (DB-də saxlanılmır — satışdan doldurulur)
 	SoldAt *time.Time `gorm:"-" json:"sold_at,omitempty"`
 }
@@ -108,6 +115,10 @@ type Sale struct {
 	// (default tag YOXDUR — əks halda GORM false-u atıb default true yazır;
 	// bütün satış yaradan yerlər Counted-i açıq şəkildə təyin edir.)
 	Counted bool `json:"counted"`
+	// təsdiq gözləyən satış — cihazın statusu «satıldı» edilib, amma satış qiyməti/təsdiqi
+	// hələ verilməyib. pending=true olduqda cəmiyə sayılmır (counted=false) və Satışlar
+	// cədvəlində ən üstdə «təsdiq gözləyən» kimi göstərilir. Təsdiqdə qiymət əl ilə yazılır.
+	Pending bool `json:"pending"`
 }
 
 // CreditPlan — taksit / nisyə borcu
