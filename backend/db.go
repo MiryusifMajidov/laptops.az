@@ -70,6 +70,7 @@ func initDB() {
 		setSetting("junk_sold_cleanup_done", "1")
 		log.Printf("migrasiya: %d köhnə qiymətsiz «satıldı» cihaz silinmişə köçürüldü", res.RowsAffected)
 	}
+	syncNotebookFromExcel() // Excel → Mərkəz komputer uyğunlaşdırması (bir dəfəlik)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
