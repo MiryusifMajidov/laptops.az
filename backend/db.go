@@ -71,6 +71,8 @@ func initDB() {
 		log.Printf("migrasiya: %d köhnə qiymətsiz «satıldı» cihaz silinmişə köçürüldü", res.RowsAffected)
 	}
 	syncNotebookFromExcel() // Excel → Mərkəz komputer uyğunlaşdırması (bir dəfəlik)
+	notebookCleanupV2()     // köhnə satıldı sil + DELL PRO bərpa + adlardan NOTEBOOK sil
+	notebookRestoreNames()  // adlardakı «NOTEBOOK» sözünü geri qaytar (v2 səhvi düzəlişi)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi

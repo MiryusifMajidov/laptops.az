@@ -260,10 +260,11 @@ func listSales(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, sales)
 }
 
-// GET /api/sales/pending — statusu «satıldı» olan BÜTÜN cihazlar (filtrsiz).
-// Satış obyekti DEYİL — birbaşa məhsullar cədvəlindən. Admin təsdiqləyir və ya silir.
+// GET /api/sales/pending — statusu «satıldı» olub hələ satış qeydi OLMAYAN cihazlar
+// (təsdiq gözləyənlər). Təsdiqlənmiş satışlar satılanlar cədvəlində görünür, burada yox.
 func pendingSaleItems(w http.ResponseWriter, r *http.Request) {
 	q := db.Where("status = ?", "sold").
+		Where("id NOT IN (?)", db.Model(&Sale{}).Select("item_id")).
 		Preload("Category").Preload("Branch").Order("created_at desc")
 	if bid, restricted := branchScope(r); restricted {
 		q = q.Where("branch_id = ?", bid)
