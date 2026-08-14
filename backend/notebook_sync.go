@@ -416,3 +416,99 @@ func applyIncrementalSync() {
 	os.Remove("/data/inc_plan.json")
 	log.Printf("inc sync tamam: adds=%d sales=%d realiz=%d", adds, sales, rz)
 }
+
+// applyBranchSync — BİRDƏFƏLİK: Zaur/Elçin filial uyğunlaşdırması /data/branch_plan.json-dan.
+// moves: filialı düzəlt (Mərkəz→Elçin); adds: əksik laptopları əlavə; completes: əskik spec.
+func applyBranchSync() {
+	if getSetting("branch_sync_v1_done") == "1" {
+		return
+	}
+	raw, err := os.ReadFile("/data/branch_plan.json")
+	if err != nil {
+		return
+	}
+	var plan struct {
+		Moves []struct {
+			Serial string `json:"serial"`
+			Branch uint   `json:"branch"`
+		} `json:"moves"`
+		Adds []struct {
+			Name   string            `json:"name"`
+			Serial string            `json:"serial"`
+			Cost   float64           `json:"cost"`
+			Branch uint              `json:"branch"`
+			Specs  map[string]string `json:"specs"`
+		} `json:"adds"`
+		Completes []struct {
+			Serial string            `json:"serial"`
+			Specs  map[string]string `json:"specs"`
+		} `json:"completes"`
+	}
+	if err := json.Unmarshal(raw, &plan); err != nil {
+		log.Printf("branch sync: json xəta: %v", err)
+		return
+	}
+	attrID := map[string]uint{}
+	var attrs []Attribute
+	db.Find(&attrs)
+	for _, a := range attrs {
+		attrID[a.Name] = a.ID
+	}
+	var nbCat Category
+	db.Where("name = ?", "Notebook").First(&nbCat)
+	var items []Item
+	db.Select("id, serial").Find(&items)
+	byser := map[string]uint{}
+	allSer := map[string]bool{}
+	for _, it := range items {
+		if it.Serial != "" {
+			byser[nsNorm(it.Serial)] = it.ID
+			allSer[nsNorm(it.Serial)] = true
+		}
+	}
+	moves, adds, comps := 0, 0, 0
+	for _, m := range plan.Moves {
+		if id, ok := byser[nsNorm(m.Serial)]; ok {
+			db.Model(&Item{}).Where("id = ?", id).Update("branch_id", m.Branch)
+			moves++
+		}
+	}
+	for _, a := range plan.Adds {
+		if a.Serial != "" && allSer[nsNorm(a.Serial)] {
+			continue
+		}
+		it := Item{Name: a.Name, Serial: a.Serial, CategoryID: nbCat.ID, BranchID: a.Branch,
+			Cost: a.Cost, Status: "in_stock", Quantity: 1, ShowOnSite: false, CreatedAt: time.Now()}
+		for an, v := range a.Specs {
+			if aid, ok := attrID[an]; ok {
+				it.Values = append(it.Values, ItemAttributeValue{AttributeID: aid, Value: v})
+			}
+		}
+		db.Omit("Values.Attribute").Create(&it)
+		if a.Serial != "" {
+			allSer[nsNorm(a.Serial)] = true
+		}
+		adds++
+	}
+	for _, cm := range plan.Completes {
+		id, ok := byser[nsNorm(cm.Serial)]
+		if !ok {
+			continue
+		}
+		for an, v := range cm.Specs {
+			aid, ok := attrID[an]
+			if !ok {
+				continue
+			}
+			var ec int64
+			db.Model(&ItemAttributeValue{}).Where("item_id = ? AND attribute_id = ?", id, aid).Count(&ec)
+			if ec == 0 {
+				db.Create(&ItemAttributeValue{ItemID: id, AttributeID: aid, Value: v})
+				comps++
+			}
+		}
+	}
+	setSetting("branch_sync_v1_done", "1")
+	os.Remove("/data/branch_plan.json")
+	log.Printf("branch sync: moves=%d adds=%d specs=%d", moves, adds, comps)
+}

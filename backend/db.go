@@ -75,6 +75,7 @@ func initDB() {
 	notebookRestoreNames()      // adlardakı «NOTEBOOK» sözünü geri qaytar (v2 səhvi düzəlişi)
 	addMissingAttributeOptions() // istifadədəki dəyərləri option kimi əlavə et (prosessor və s.)
 	applyIncrementalSync()       // yeni Excel versiyasından inkremental əlavələr (add/sales/realiz)
+	applyBranchSync()            // Zaur/Elçin filial uyğunlaşdırması (moves/adds/completes)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
