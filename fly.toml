@@ -13,13 +13,17 @@ primary_region = "fra"   # Frankfurt (Azərbaycana yaxın Avropa mərkəzi)
 [[mounts]]
   source = "laptops_data"
   destination = "/data"
+  # avtomatik genişlənmə: 90% dolanda (~500MB qalanda) 5GB artır, maksimum 10GB
+  auto_extend_size_threshold = 90
+  auto_extend_size_increment = "5GB"
+  auto_extend_size_limit = "10GB"
 
 [http_service]
   internal_port = 8080
   force_https = true            # http → https avtomatik
-  auto_stop_machines = "stop"   # boşdursa dayanır (qənaət)
-  auto_start_machines = true    # sorğu gələndə özü qalxır
-  min_machines_running = 0
+  auto_stop_machines = "off"    # həmişə oyaq (SEO + sürət üçün; kreditdən ödənir)
+  auto_start_machines = true
+  min_machines_running = 1      # ən azı 1 maşın həmişə işləyir
 
 [[vm]]
   size = "shared-cpu-1x"
