@@ -252,3 +252,46 @@ func notebookRestoreNames() {
 	os.Remove("/data/notebook_names.json")
 	log.Printf("notebook names restore: %d ad geri qaytarıldı", fixed)
 }
+
+// addMissingAttributeOptions — BİRDƏFƏLİK: istifadədə olan, lakin options siyahısında
+// olmayan atribut dəyərlərini option kimi əlavə edir (yeni prosessorlar və s. dropdown-da
+// real seçim olsun). Prosessorda kəsik/zibil dəyərləri («I5», «... - 7») keçir.
+func addMissingAttributeOptions() {
+	if getSetting("attr_options_backfill_v1_done") == "1" {
+		return
+	}
+	attrs := []uint{2, 3, 7, 8, 9, 13, 14} // RAM, Ekran ölçüsü, Prosessor, SSD, Ekran kartı, keyfiyyət, tezlik
+	added := 0
+	for _, aid := range attrs {
+		var opts []AttributeOption
+		db.Where("attribute_id = ?", aid).Find(&opts)
+		existing := map[string]bool{}
+		maxPos := 0
+		for _, o := range opts {
+			existing[o.Value] = true
+			if o.Position > maxPos {
+				maxPos = o.Position
+			}
+		}
+		var vals []string
+		db.Raw("SELECT DISTINCT value FROM item_attribute_values WHERE attribute_id = ?", aid).Scan(&vals)
+		for _, v := range vals {
+			v = strings.TrimSpace(v)
+			if v == "" || existing[v] {
+				continue
+			}
+			if aid == 7 { // Prosessor — yalnız düzgün formatlı: "... - <ən azı 3 simvol model>"
+				idx := strings.LastIndex(v, " - ")
+				if idx < 0 || len(strings.TrimSpace(v[idx+3:])) < 3 {
+					continue // "I5", "AMD Ryzen 7 - 7" kimi kəsik/zibili keç
+				}
+			}
+			maxPos++
+			db.Create(&AttributeOption{AttributeID: aid, Value: v, Position: maxPos})
+			existing[v] = true
+			added++
+		}
+	}
+	setSetting("attr_options_backfill_v1_done", "1")
+	log.Printf("attribute options backfill: %d yeni option əlavə olundu", added)
+}

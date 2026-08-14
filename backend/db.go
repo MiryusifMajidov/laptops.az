@@ -72,7 +72,8 @@ func initDB() {
 	}
 	syncNotebookFromExcel() // Excel → Mərkəz komputer uyğunlaşdırması (bir dəfəlik)
 	notebookCleanupV2()     // köhnə satıldı sil + DELL PRO bərpa + adlardan NOTEBOOK sil
-	notebookRestoreNames()  // adlardakı «NOTEBOOK» sözünü geri qaytar (v2 səhvi düzəlişi)
+	notebookRestoreNames()      // adlardakı «NOTEBOOK» sözünü geri qaytar (v2 səhvi düzəlişi)
+	addMissingAttributeOptions() // istifadədəki dəyərləri option kimi əlavə et (prosessor və s.)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
