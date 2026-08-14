@@ -295,3 +295,124 @@ func addMissingAttributeOptions() {
 	setSetting("attr_options_backfill_v1_done", "1")
 	log.Printf("attribute options backfill: %d yeni option əlavə olundu", added)
 }
+
+// applyIncrementalSync — BİRDƏFƏLİK: yeni Excel versiyasından inkremental əlavələr.
+// /data/inc_plan.json-dan oxuyur: yeni NOTEBOOK cihazları (add), yeni satışlar (sales),
+// yeni realizasiya (realiz). Yalnız Mərkəz; idempotent (seriya ilə); marker ilə bir dəfə.
+func applyIncrementalSync() {
+	if getSetting("inc_sync_v1_done") == "1" {
+		return
+	}
+	raw, err := os.ReadFile("/data/inc_plan.json")
+	if err != nil {
+		return
+	}
+	var plan struct {
+		Adds []struct {
+			Name   string            `json:"name"`
+			Serial string            `json:"serial"`
+			Cost   float64           `json:"cost"`
+			Specs  map[string]string `json:"specs"`
+		} `json:"adds"`
+		Sales []struct {
+			Serial string  `json:"serial"`
+			Cost   float64 `json:"cost"`
+			Sale   float64 `json:"sale"`
+			Date   string  `json:"date"`
+		} `json:"sales"`
+		Realiz []struct {
+			Name   string            `json:"name"`
+			Serial string            `json:"serial"`
+			Cost   float64           `json:"cost"`
+			Cat    uint              `json:"cat"`
+			Specs  map[string]string `json:"specs"`
+		} `json:"realiz"`
+	}
+	if err := json.Unmarshal(raw, &plan); err != nil {
+		log.Printf("inc sync: json xəta: %v", err)
+		return
+	}
+	attrID := map[string]uint{}
+	var attrs []Attribute
+	db.Find(&attrs)
+	for _, a := range attrs {
+		attrID[a.Name] = a.ID
+	}
+	var nbCat Category
+	db.Where("name = ?", "Notebook").First(&nbCat)
+	allSer := map[string]bool{}
+	{
+		var items []Item
+		db.Select("serial").Find(&items)
+		for _, it := range items {
+			if it.Serial != "" {
+				allSer[nsNorm(it.Serial)] = true
+			}
+		}
+	}
+	mk := func(catID uint, name, serial string, cost float64, specs map[string]string, status string) {
+		if allSer[nsNorm(serial)] {
+			return
+		}
+		it := Item{Name: name, Serial: serial, CategoryID: catID, BranchID: 1, Cost: cost,
+			Status: status, Quantity: 1, ShowOnSite: false, CreatedAt: time.Now()}
+		for an, v := range specs {
+			if aid, ok := attrID[an]; ok {
+				it.Values = append(it.Values, ItemAttributeValue{AttributeID: aid, Value: v})
+			}
+		}
+		db.Omit("Values.Attribute").Create(&it)
+		allSer[nsNorm(serial)] = true
+	}
+	adds, sales, rz := 0, 0, 0
+	for _, a := range plan.Adds {
+		if !allSer[nsNorm(a.Serial)] {
+			mk(nbCat.ID, a.Name, a.Serial, a.Cost, a.Specs, "in_stock")
+			adds++
+		}
+	}
+	for _, r := range plan.Realiz {
+		if !allSer[nsNorm(r.Serial)] {
+			cat := r.Cat
+			if cat == 0 {
+				cat = nbCat.ID
+			}
+			mk(cat, r.Name, r.Serial, r.Cost, r.Specs, "consignment")
+			rz++
+		}
+	}
+	// SALES — Mərkəz item tap (seriya ilə), satışı yoxdursa yarat + «satıldı» et
+	var merkez []Item
+	db.Where("branch_id = ?", 1).Select("id, serial, cost").Find(&merkez)
+	byser := map[string]Item{}
+	for _, it := range merkez {
+		if it.Serial != "" {
+			byser[nsNorm(it.Serial)] = it
+		}
+	}
+	for _, s := range plan.Sales {
+		it, ok := byser[nsNorm(s.Serial)]
+		if !ok {
+			continue
+		}
+		var cnt int64
+		db.Model(&Sale{}).Where("item_id = ?", it.ID).Count(&cnt)
+		if cnt == 0 {
+			cost := it.Cost
+			if cost == 0 {
+				cost = s.Cost
+			}
+			soldAt := time.Now()
+			if t, e := time.Parse("2006-01-02", s.Date); e == nil {
+				soldAt = t
+			}
+			db.Create(&Sale{ItemID: it.ID, SalePrice: s.Sale, Quantity: 1, Profit: s.Sale - cost,
+				Channel: "cash", BranchID: 1, SoldAt: soldAt, Counted: true})
+			sales++
+		}
+		db.Model(&Item{}).Where("id = ?", it.ID).Update("status", "sold")
+	}
+	setSetting("inc_sync_v1_done", "1")
+	os.Remove("/data/inc_plan.json")
+	log.Printf("inc sync tamam: adds=%d sales=%d realiz=%d", adds, sales, rz)
+}

@@ -74,6 +74,7 @@ func initDB() {
 	notebookCleanupV2()     // köhnə satıldı sil + DELL PRO bərpa + adlardan NOTEBOOK sil
 	notebookRestoreNames()      // adlardakı «NOTEBOOK» sözünü geri qaytar (v2 səhvi düzəlişi)
 	addMissingAttributeOptions() // istifadədəki dəyərləri option kimi əlavə et (prosessor və s.)
+	applyIncrementalSync()       // yeni Excel versiyasından inkremental əlavələr (add/sales/realiz)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
