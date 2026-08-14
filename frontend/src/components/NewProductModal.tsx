@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, uploadFile, imgURL, type Branch, type Category, type Item, type Language, STATUS_AZ } from '../api'
+import { api, uploadFile, imgURL, type Branch, type Category, type Item, type Language, STATUS_AZ, isAdmin, currentBranchId, currentBranchName } from '../api'
 import { useFetch } from '../lib/hooks'
 import { useToast } from '../lib/toast'
 import { useRefresh } from '../lib/refresh'
@@ -18,7 +18,9 @@ export default function NewProductModal({ onClose, edit }: { onClose: () => void
   const [wholesale, setWholesale] = useState(edit && edit.wholesale_price ? String(edit.wholesale_price) : '')
   const [discount, setDiscount] = useState(edit && edit.discount ? String(edit.discount) : '')
   const [quantity, setQuantity] = useState(edit ? String(edit.quantity ?? 1) : '1')
-  const [branchId, setBranchId] = useState<number | null>(edit ? edit.branch_id : null)
+  const admin = isAdmin()
+  // satıcı (admin deyil) yeni məhsulda öz filialına kilidlidir; admin istədiyi filialı seçir
+  const [branchId, setBranchId] = useState<number | null>(edit ? edit.branch_id : (admin ? null : currentBranchId()))
   // adlar dil üzrə: {az:.., ru:.., ...}
   const [names, setNames] = useState<Record<string, string>>({})
   const [nameTab, setNameTab] = useState('')
@@ -32,16 +34,18 @@ export default function NewProductModal({ onClose, edit }: { onClose: () => void
     try { return edit?.gallery ? JSON.parse(edit.gallery) : [] } catch { return [] }
   })
   const [uploading, setUploading] = useState(false)
-  const [values, setValues] = useState<Record<number, string>>(() => {
-    const m: Record<number, string> = {}
-    edit?.values?.forEach((v) => { m[v.attribute_id] = v.value })
+  const [dragImg, setDragImg] = useState<number | null>(null)
+  // hər xüsusiyyət üçün seçilmiş dəyər(lər) — massiv (tək seçim = 1 element, multiselect = çox)
+  const [values, setValues] = useState<Record<number, string[]>>(() => {
+    const m: Record<number, string[]> = {}
+    edit?.values?.forEach((v) => { (m[v.attribute_id] ||= []).push(v.value) })
     return m
   })
   const [saving, setSaving] = useState(false)
   const [translating, setTranslating] = useState(false)
 
   useEffect(() => { if (!edit && cats && cats.length && catId === null) setCatId(cats[0].id) }, [cats, catId, edit])
-  useEffect(() => { if (!edit && branches && branches.length && branchId === null) setBranchId(branches[0].id) }, [branches, branchId, edit])
+  useEffect(() => { if (!edit && admin && branches && branches.length && branchId === null) setBranchId(branches[0].id) }, [branches, branchId, edit, admin])
   // dillər yüklənəndə ad xanalarını qur
   useEffect(() => {
     if (inited || !langs) return
@@ -83,7 +87,7 @@ export default function NewProductModal({ onClose, edit }: { onClose: () => void
       quantity: Math.max(1, Number(quantity) || 1),
       show_on_site: site, status, card_image: cardImage, gallery: JSON.stringify(gallery),
       translations,
-      values: Object.entries(values).filter(([, v]) => v).map(([aid, v]) => ({ attribute_id: Number(aid), value: v })),
+      values: Object.entries(values).flatMap(([aid, vals]) => (vals ?? []).filter(Boolean).map((val) => ({ attribute_id: Number(aid), value: val }))),
     }
     if (createdAt) body.created_at = createdAt
     if (edit && status === 'sold' && soldAt) body.sold_at = soldAt
@@ -164,11 +168,31 @@ export default function NewProductModal({ onClose, edit }: { onClose: () => void
 
           {cat?.attributes?.map((a) => (
             <div className="field" key={a.id}>
-              <label>{a.name}</label>
-              <select value={values[a.id] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [a.id]: e.target.value }))}>
-                <option value="">— seç —</option>
-                {a.options?.map((o) => <option key={o.id} value={o.value}>{o.value}</option>)}
-              </select>
+              <label>{a.name}{a.multiselect && <span className="tiny" style={{ fontWeight: 600 }}> (çox seçim)</span>}</label>
+              {a.multiselect ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingTop: 2 }}>
+                  {a.options?.map((o) => {
+                    const on = (values[a.id] ?? []).includes(o.value)
+                    return (
+                      <span key={o.id} className={'chip' + (on ? ' on' : '')} style={{ cursor: 'pointer' }}
+                        onClick={() => setValues((v) => {
+                          const cur = v[a.id] ?? []
+                          return { ...v, [a.id]: on ? cur.filter((x) => x !== o.value) : [...cur, o.value] }
+                        })}>
+                        {o.value}
+                      </span>
+                    )
+                  })}
+                  {!a.options?.length && <span className="tiny" style={{ color: 'var(--muted)' }}>seçim yoxdur</span>}
+                </div>
+              ) : (
+                <select value={values[a.id]?.[0] ?? ''} onChange={(e) => setValues((v) => ({ ...v, [a.id]: e.target.value ? [e.target.value] : [] }))}>
+                  <option value="">— seç —</option>
+                  {/* cari dəyər seçimlər siyahısında yoxdursa da göstər (seçili qalsın) */}
+                  {(() => { const cur = values[a.id]?.[0]; return cur && !a.options?.some((o) => o.value === cur) ? <option value={cur}>{cur}</option> : null })()}
+                  {a.options?.map((o) => <option key={o.id} value={o.value}>{o.value}</option>)}
+                </select>
+              )}
             </div>
           ))}
 
@@ -181,10 +205,14 @@ export default function NewProductModal({ onClose, edit }: { onClose: () => void
           <div className="field"><label>Say (ədəd) <span className="tiny" style={{ fontWeight: 600 }}>serialı mal = 1 · aksesuar = çox</span></label>
             <input className="data" type="number" min={1} placeholder="1" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
           </div>
-          <div className="field"><label>Filial</label>
-            <select value={branchId ?? ''} onChange={(e) => setBranchId(Number(e.target.value))}>
-              {branches?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
+          <div className="field"><label>Filial {!admin && <span className="tiny" style={{ fontWeight: 600 }}>(öz filialınız — dəyişilməz)</span>}</label>
+            {admin ? (
+              <select value={branchId ?? ''} onChange={(e) => setBranchId(Number(e.target.value))}>
+                {branches?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            ) : (
+              <input readOnly disabled value={branches?.find((b) => b.id === branchId)?.name || currentBranchName() || '—'} style={{ background: 'var(--surface)', color: 'var(--muted)', cursor: 'not-allowed' }} />
+            )}
           </div>
 
           <div className="field"><label>Alınma tarixi <span className="tiny" style={{ fontWeight: 600 }}>(gəldiyi gün)</span></label>
@@ -208,11 +236,17 @@ export default function NewProductModal({ onClose, edit }: { onClose: () => void
           </div>
 
           {/* Qalereya — məhsul səhifəsində görünən çoxlu şəkil */}
-          <div className="field"><label>Qalereya <span className="tiny" style={{ fontWeight: 600 }}>(məhsul səhifəsi — çox şəkil)</span></label>
+          <div className="field"><label>Qalereya <span className="tiny" style={{ fontWeight: 600 }}>(məhsul səhifəsi — çox şəkil · sürüşdürüb sırala)</span></label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {gallery.map((g, i) => (
-                <div key={i} style={{ position: 'relative', width: 64, height: 64 }}>
-                  <img src={imgURL(g)} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)' }} />
+                <div key={g + i} draggable
+                  onDragStart={() => setDragImg(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); setGallery((arr) => { if (dragImg === null || dragImg === i) return arr; const a = [...arr]; const [m] = a.splice(dragImg, 1); a.splice(i, 0, m); return a }); setDragImg(null) }}
+                  onDragEnd={() => setDragImg(null)}
+                  style={{ position: 'relative', width: 64, height: 64, cursor: 'grab', opacity: dragImg === i ? 0.4 : 1 }} title="Sürüşdürüb sırala">
+                  <img src={imgURL(g)} alt="" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--line)', pointerEvents: 'none' }} />
+                  {i === 0 && <span style={{ position: 'absolute', bottom: -6, left: '50%', transform: 'translateX(-50%)', background: 'var(--ink)', color: '#fff', fontSize: 8.5, fontWeight: 700, padding: '1px 5px', borderRadius: 6, whiteSpace: 'nowrap' }}>əsas</span>}
                   <button onClick={() => setGallery((arr) => arr.filter((_, x) => x !== i))} style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: 'var(--bad)', color: '#fff', fontSize: 11, lineHeight: '18px', textAlign: 'center' }}>×</button>
                 </div>
               ))}
