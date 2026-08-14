@@ -512,3 +512,16 @@ func applyBranchSync() {
 	os.Remove("/data/branch_plan.json")
 	log.Printf("branch sync: moves=%d adds=%d specs=%d", moves, adds, comps)
 }
+
+// deleteSerialessZaurLaptops — BİRDƏFƏLİK: Excel-də seriyası olmayan üçün əlavə edilmiş
+// seriyasız Zaur laptoplarını sil (istifadəçi qərarı). Zaur (3) + Notebook (5) + in_stock +
+// seriyasız cihazlar → soft delete (Silinmiş məhsullarda qalır). Marker ilə bir dəfə.
+func deleteSerialessZaurLaptops() {
+	if getSetting("del_serialess_zaur_v1_done") == "1" {
+		return
+	}
+	res := db.Where("branch_id = ? AND category_id = ? AND status = ? AND (serial IS NULL OR TRIM(serial) = '')",
+		3, 5, "in_stock").Delete(&Item{})
+	setSetting("del_serialess_zaur_v1_done", "1")
+	log.Printf("serialess zaur laptop silindi: %d", res.RowsAffected)
+}
