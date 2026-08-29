@@ -79,5 +79,10 @@
 	     (hər yükləmədə "encryption" sualı verilməsin). -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Arxa planda push bildirişləri qəbul etmək üçün -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>

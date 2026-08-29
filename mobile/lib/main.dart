@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -34,10 +34,9 @@ Future<void> main() async {
   await AppConfig.load();
   await Store.I.load();
   await L.I.load();
-  // FCM push hələlik yalnız Android-də. iOS push üçün APNs açarı + Push capability
-  // lazımdır — hazır olanda bu şərti götürəcəyik (funksional olmayan bildiriş
-  // icazəsi App Store review-da problem yaratmasın deyə iOS-da söndürülüb).
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) await _initFcm();
+  // FCM push — həm Android, həm iOS. (iOS üçün APNs Auth Key Firebase-ə yüklənib,
+  // Push capability + entitlements əlavə olunub.)
+  if (!kIsWeb) await _initFcm();
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
