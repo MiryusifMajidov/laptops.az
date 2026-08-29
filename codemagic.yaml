@@ -22,20 +22,28 @@ workflows:
     integrations:
       app_store_connect: laptops_az_asc_key   # ← Codemagic-dəki API key inteqrasiyasının ADI
     environment:
-      ios_signing:
-        distribution_type: app_store          # avtomatik sertifikat + provisioning
-        bundle_identifier: az.laptops.laptopsAz
       flutter: stable                          # lazım olsa dəqiq versiyaya pin et
       xcode: latest
       cocoapods: default
     scripts:
+      # Kod imzalama — sertifikat + provisioning profili API key ilə YARADILIR
+      # (təzə Apple hesabında hələ yoxdur; --create onları özü yaradır).
+      - name: Keychain hazırla
+        script: keychain initialize
+      - name: Sertifikat + provisioning profili yarat/gətir
+        script: |
+          app-store-connect fetch-signing-files "az.laptops.laptopsAz" \
+            --type IOS_APP_STORE \
+            --create
+      - name: Sertifikatı keychain-ə əlavə et
+        script: keychain add-certificates
+      - name: Xcode imzalamasını qur
+        script: xcode-project use-profiles
       - name: Flutter pub get
         script: flutter pub get
       - name: CocoaPods install
         script: cd ios && pod install
-      - name: Provisioning profiles (Codemagic auto-signing)
-        script: xcode-project use-profiles
-      - name: Build signed IPA
+      - name: Signed IPA build et
         script: flutter build ipa --release --export-options-plist=$HOME/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
