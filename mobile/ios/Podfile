@@ -1,5 +1,5 @@
-# Firebase iOS 13+ tələb edir — qlobal platformanı təyin edirik.
-platform :ios, '13.0'
+# Modern Flutter + Firebase iOS 15+ tələb edir — qlobal platformanı təyin edirik.
+platform :ios, '15.0'
 
 # CocoaPods analytics build gecikməsinə səbəb olur — söndürülür.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -41,8 +41,8 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
-      # bütün pod-ları ən azı iOS 13-ə qaldır (Firebase üçün)
-      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
+      # bütün pod-ları ən azı iOS 15-ə qaldır (Firebase + modern Flutter üçün)
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
     end
   end
 end
