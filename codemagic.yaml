@@ -1,0 +1,46 @@
+# ============================================================================
+# Codemagic CI — Laptops.az Flutter iOS → App Store (TestFlight)
+# Mac lazım deyil; build buludda macOS maşınında olur, Windows-dan idarə edilir.
+#
+# İşə düşməzdən əvvəl Codemagic UI-da HAZIRLA:
+#   1) Bu repo-nu Codemagic-ə qoş (GitHub).
+#   2) App Store Connect API açarı yarat (appstoreconnect.apple.com →
+#      Users and Access → Integrations → App Store Connect API) və onu
+#      Codemagic → Teams → Integrations → App Store Connect-ə əlavə et.
+#      İnteqrasiyanın ADINI aşağıdakı `app_store_connect:` dəyəri ilə eyni et
+#      (indi: laptops_az_asc_key).
+#   3) App Store Connect-də app record yarat — Bundle ID: az.laptops.laptopsAz
+#
+# Flutter tətbiqi repo kökündə deyil, `mobile/` qovluğundadır → working_directory.
+# ============================================================================
+workflows:
+  ios-appstore:
+    name: iOS · App Store (TestFlight)
+    instance_type: mac_mini_m2
+    max_build_duration: 90
+    working_directory: mobile
+    integrations:
+      app_store_connect: laptops_az_asc_key   # ← Codemagic-dəki API key inteqrasiyasının ADI
+    environment:
+      ios_signing:
+        distribution_type: app_store          # avtomatik sertifikat + provisioning
+        bundle_identifier: az.laptops.laptopsAz
+      flutter: stable                          # lazım olsa dəqiq versiyaya pin et
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: CocoaPods install
+        script: cd ios && pod install
+      - name: Provisioning profiles (Codemagic auto-signing)
+        script: xcode-project use-profiles
+      - name: Build signed IPA
+        script: flutter build ipa --release --export-options-plist=$HOME/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true             # TestFlight beta-ya yüklə (sonra App Store-a promote)

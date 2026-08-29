@@ -66,5 +66,18 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- url_launcher iOS-da bu sxemləri yoxlaya bilsin (zəng / SMS / e-poçt / sayt) -->
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>sms</string>
+		<string>mailto</string>
+		<string>https</string>
+		<string>http</string>
+	</array>
+	<!-- Yalnız standart HTTPS işlədilir → ixrac şifrələmə tələbindən azaddır
+	     (hər yükləmədə "encryption" sualı verilməsin). -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
