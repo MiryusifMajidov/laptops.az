@@ -99,6 +99,51 @@ const privacyHTML = `<!doctype html>
     Vebsayt: <a href="https://laptops.az">laptops.az</a></p>
   </div>
 
+  <h2 style="margin-top:48px;padding-top:30px;border-top:1px solid var(--line)">Privacy Policy (English)</h2>
+  <p>This Privacy Policy explains what data the “Laptops.az” mobile app and the
+  <a href="https://laptops.az">laptops.az</a> website collect, how it is used and how it is protected.</p>
+
+  <h2>1. Information we collect</h2>
+  <div class="card">
+    <ul>
+      <li><b>Order details:</b> the <b>name</b> and <b>phone number</b> you enter when placing an order
+        (used only to process the order and contact you).</li>
+      <li><b>Notification identifier:</b> your device’s Firebase Cloud Messaging (FCM) push token, used
+        to send new-product notifications.</li>
+      <li><b>Technical data:</b> your chosen language and basic anonymous usage statistics.</li>
+    </ul>
+    <p class="muted" style="margin-top:10px">The app does NOT collect card, payment or other financial
+    data — orders are contact-based and payment is completed in-store.</p>
+  </div>
+
+  <h2>2. How we use data</h2>
+  <ul>
+    <li>To receive and process your orders;</li>
+    <li>To send push notifications about new products and discounts;</li>
+    <li>To provide and improve the app’s functionality.</li>
+  </ul>
+
+  <h2>3. Sharing with third parties</h2>
+  <p>We do not sell your personal data or share it for advertising. We use one service provider:
+  <b>Google Firebase (Cloud Messaging)</b> to deliver push notifications
+  (<a href="https://firebase.google.com/support/privacy">privacy policy</a>).</p>
+
+  <h2>4. Retention &amp; security</h2>
+  <p>Order data is kept only as long as needed to provide the service and is protected with appropriate
+  technical measures. You can revoke the notification token anytime by deleting the app.</p>
+
+  <h2>5. Children’s privacy</h2>
+  <p>The app is not directed to children under 13 and we do not knowingly collect their personal data.</p>
+
+  <h2>6. Your rights</h2>
+  <p>You may request deletion or correction of data we hold about you by contacting us.</p>
+
+  <h2>7. Contact</h2>
+  <div class="card">
+    <p style="margin:0">Questions: <a href="mailto:info@laptops.az">info@laptops.az</a><br>
+    Website: <a href="https://laptops.az">laptops.az</a></p>
+  </div>
+
   <footer>
     © 2009–2026 Laptops.az. Bu siyasət dəyişdirilə bilər; yenilənmələr bu səhifədə dərc olunur.
   </footer>

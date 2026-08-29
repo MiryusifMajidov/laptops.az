@@ -13,7 +13,7 @@
 | **Age Rating** | 4+ |
 | **Support URL** | https://laptops.az |
 | **Marketing URL** | https://laptops.az |
-| **Privacy Policy URL** | https://laptops.az/privacy.html |
+| **Privacy Policy URL** | https://laptops.az/privacy (domen işləməsə: https://laptops-az.fly.dev/privacy) |
 | **Copyright** | © 2026 Laptops.az |
 
 ---
