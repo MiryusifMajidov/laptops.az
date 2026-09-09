@@ -49,6 +49,12 @@ type fix2Plan struct {
 	// DeleteItemIDs — YALNIZ istifadəçinin açıq göstərişi ilə, konkret id-lər üzrə.
 	// Ümumi qayda: məhsul SİLİNMİR. Bu sahə yalnız səhvən yaradılmış boş qeydlər üçündür.
 	DeleteItemIDs []uint `json:"delete_item_ids"`
+	// RestoreStatus — məhsulu əvvəlki vəziyyətinə qaytarır (silmə deyil).
+	RestoreStatus []struct {
+		ItemID     uint   `json:"item_id"`
+		Status     string `json:"status"`
+		ShowOnSite bool   `json:"show_on_site"`
+	} `json:"restore_status"`
 }
 
 func f2date(s string) time.Time {
@@ -72,6 +78,9 @@ func applyFix5202609() { runFixPlan("fix5_2026_09", "/data/fix5_2026_09.json") }
 // applyFix6202609 — istifadəçinin göstərişi ilə səhvən yaradılmış 10 boş məhsul qeydi.
 func applyFix6202609() { runFixPlan("fix6_2026_09", "/data/fix6_2026_09.json") }
 
+// applyFix7202609 — kredit köçürməsinin təmizlənməsi: 47 saxta məhsul silinir, 3-ü bərpa olunur.
+func applyFix7202609() { runFixPlan("fix7_2026_09", "/data/fix7_2026_09.json") }
+
 func runFixPlan(marker, path string) {
 	if getSetting(marker+"_done") == "1" {
 		return
@@ -85,7 +94,7 @@ func runFixPlan(marker, path string) {
 		log.Printf("%s: plan oxunmadı: %v", marker, err)
 		return
 	}
-	var nDel, nSale, nNewSold, nNewStock, nSer, nItemDel int
+	var nDel, nSale, nNewSold, nNewStock, nSer, nItemDel, nRestore int
 
 	// 1) kredit satışlarını sil — YALNIZ satış sətri.
 	// Məhsulun statusuna toxunulmur: mal müştəridədir (stokda deyil),
@@ -178,6 +187,16 @@ func runFixPlan(marker, path string) {
 		nItemDel++
 	}
 
+	// 4d) məhsulu əvvəlki vəziyyətinə qaytar
+	for _, m := range p.RestoreStatus {
+		var it Item
+		if db.First(&it, m.ItemID).Error != nil {
+			continue
+		}
+		db.Model(&it).Updates(map[string]any{"status": m.Status, "show_on_site": m.ShowOnSite})
+		nRestore++
+	}
+
 	// 5) seriya düzəlişi
 	for _, m := range p.SetSerial {
 		var it Item
@@ -187,8 +206,8 @@ func runFixPlan(marker, path string) {
 		}
 	}
 
-	log.Printf("%s: silinen_satis=%d yeni_satis=%d yeni_satilmis_mehsul=%d yeni_stok=%d seriya=%d silinen_mehsul=%d",
-		marker, nDel, nSale, nNewSold, nNewStock, nSer, nItemDel)
+	log.Printf("%s: silinen_satis=%d yeni_satis=%d yeni_satilmis_mehsul=%d yeni_stok=%d seriya=%d silinen_mehsul=%d berpa=%d",
+		marker, nDel, nSale, nNewSold, nNewStock, nSer, nItemDel, nRestore)
 	setSetting(marker+"_done", "1")
 	os.Remove(path)
 }
