@@ -79,6 +79,10 @@ func initDB() {
 	deleteSerialessZaurLaptops() // Excel-də seriyası olmayan seriyasız Zaur laptopları sil
 	applyReconcile202609()       // 2026-09 uzlaşdırma auditi: realizasiya/filial/maya düzəlişləri
 	applyCreditBackfill202609()  // Excel «KREDIT» vərəqi → credit_plans (ilkin ödəniş 0, ilk ödəniş +1 ay)
+	applyFix2202609()            // kredit satışlarını sil + son 10 günün əksik satış/stokunu tamamla
+	applyFix3202609()            // seriyasız (aksesuar/sborka/monitor) əksik satışlar
+	applyFix4202609()            // fix3-də səhvən yaranmış dublikat satışların təmizlənməsi
+	applyFix5202609()            // son dublikat satışın təmizlənməsi
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
