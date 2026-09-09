@@ -83,6 +83,7 @@ func initDB() {
 	applyFix3202609()            // seriyasız (aksesuar/sborka/monitor) əksik satışlar
 	applyFix4202609()            // fix3-də səhvən yaranmış dublikat satışların təmizlənməsi
 	applyFix5202609()            // son dublikat satışın təmizlənməsi
+	applyFix6202609()            // səhvən yaradılmış 10 boş məhsul qeydi (istifadəçi göstərişi)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi

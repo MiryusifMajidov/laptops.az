@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -44,7 +45,10 @@ type fix2Plan struct {
 		ItemID uint   `json:"item_id"`
 		Serial string `json:"serial"`
 	} `json:"set_serial"`
-	DeleteSaleIDs []uint `json:"delete_sale_ids"` // səhvən yaradılmış satış sətirləri (MƏHSUL silinmir)
+	DeleteSaleIDs []uint `json:"delete_sale_ids"` // səhvən yaradılmış satış sətirləri
+	// DeleteItemIDs — YALNIZ istifadəçinin açıq göstərişi ilə, konkret id-lər üzrə.
+	// Ümumi qayda: məhsul SİLİNMİR. Bu sahə yalnız səhvən yaradılmış boş qeydlər üçündür.
+	DeleteItemIDs []uint `json:"delete_item_ids"`
 }
 
 func f2date(s string) time.Time {
@@ -65,6 +69,9 @@ func applyFix4202609() { runFixPlan("fix4_2026_09", "/data/fix4_2026_09.json") }
 // applyFix5202609 — son bir dublikat satışın təmizlənməsi.
 func applyFix5202609() { runFixPlan("fix5_2026_09", "/data/fix5_2026_09.json") }
 
+// applyFix6202609 — istifadəçinin göstərişi ilə səhvən yaradılmış 10 boş məhsul qeydi.
+func applyFix6202609() { runFixPlan("fix6_2026_09", "/data/fix6_2026_09.json") }
+
 func runFixPlan(marker, path string) {
 	if getSetting(marker+"_done") == "1" {
 		return
@@ -78,7 +85,7 @@ func runFixPlan(marker, path string) {
 		log.Printf("%s: plan oxunmadı: %v", marker, err)
 		return
 	}
-	var nDel, nSale, nNewSold, nNewStock, nSer int
+	var nDel, nSale, nNewSold, nNewStock, nSer, nItemDel int
 
 	// 1) kredit satışlarını sil — YALNIZ satış sətri.
 	// Məhsulun statusuna toxunulmur: mal müştəridədir (stokda deyil),
@@ -152,6 +159,25 @@ func runFixPlan(marker, path string) {
 		nDel += int(res.RowsAffected)
 	}
 
+	// 4c) səhvən yaradılmış BOŞ məhsul qeydləri (yalnız açıq göstərişlə, konkret id).
+	// Təhlükəsizlik: satışı, şəkli, realizasiyası olan məhsul SİLİNMİR.
+	for _, id := range p.DeleteItemIDs {
+		var it Item
+		if db.First(&it, id).Error != nil {
+			continue
+		}
+		var ns, nc int64
+		db.Model(&Sale{}).Where("item_id = ?", id).Count(&ns)
+		db.Model(&Consignment{}).Where("item_id = ?", id).Count(&nc)
+		if ns > 0 || nc > 0 || strings.TrimSpace(it.CardImage) != "" ||
+			strings.TrimSpace(it.Gallery) != "" && it.Gallery != "[]" {
+			log.Printf("%s: item #%d SİLİNMƏDİ (satış/şəkil/realizasiya var)", marker, id)
+			continue
+		}
+		db.Delete(&it) // soft-delete — «Silinmiş məhsullar» səhifəsindən bərpa oluna bilər
+		nItemDel++
+	}
+
 	// 5) seriya düzəlişi
 	for _, m := range p.SetSerial {
 		var it Item
@@ -161,8 +187,8 @@ func runFixPlan(marker, path string) {
 		}
 	}
 
-	log.Printf("%s: silinen_kredit_satisi=%d yeni_satis=%d yeni_satilmis_mehsul=%d yeni_stok=%d seriya=%d",
-		marker, nDel, nSale, nNewSold, nNewStock, nSer)
+	log.Printf("%s: silinen_satis=%d yeni_satis=%d yeni_satilmis_mehsul=%d yeni_stok=%d seriya=%d silinen_mehsul=%d",
+		marker, nDel, nSale, nNewSold, nNewStock, nSer, nItemDel)
 	setSetting(marker+"_done", "1")
 	os.Remove(path)
 }
