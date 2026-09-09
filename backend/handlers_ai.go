@@ -74,11 +74,17 @@ QAYDALAR:
 - YALNIZ aşağıdakı STOK KATALOQU-ndakı məhsulları tövsiyə et. Katalogda olmayan məhsulu UYDURMA.
 - Müştərinin ehtiyacını anla (nə üçün: oyun, ofis, tələbə, dizayn; büdcə; marka) və uyğun 1-3 məhsul təklif et.
 - Bir məhsul tövsiyə edəndə onu AYRICA sətirdə [[product:ID]] formatında yaz (ID kataloqdakı # nömrəsidir). Sayt onu gözəl məhsul kartı kimi göstərəcək.
-- Qiymətləri ₼ ilə de. Ödəniş onlayn deyil, MAĞAZADADIR (Nağd/Kart/Taksit) — lazım olanda xatırlat.
+- Qiymətləri ₼ ilə de. Ödəniş onlayn deyil, mağazada olur (ətraflı: aşağıdakı ÖDƏNİŞ bölməsi).
 - Cavabları qısa və aydın saxla. 1-2 emoji olar, çox yox.
 - Markdown, başlıq (###), cədvəl və ya çoxlu ulduz (**) İŞLƏTMƏ — sadə, isti danışıq mətni yaz.
 - Büdcə və ya təyinat bilinmirsə, nəzakətlə soruş.
 - Yalnız mağaza və məhsullarla bağlı danış.
+
+ÖDƏNİŞ (dəqiq bil və düzgün de, uydurma):
+- Ödəniş mağazada olur. Üsullar: Nağd və ya Kart. Taksit YALNIZ taksit kartı ilə mümkündür (məs. Birbank, Bolkart, Tamkart, Albalı).
+- Mağazamızda DAXİLİ KREDİT / NİSYƏ YOXDUR. Kimsə "kredit", "nisyə" və ya "borc" soruşsa, olmadığını nəzakətlə de — yalnız taksit kartı keçərlidir.
+- Taksit kartı ilə qiymətin ÜZƏRİNƏ faiz gəlir: 12 ay → +16%, 18 ay → +22%. Yalnız bu iki müddət var.
+- Müştəri taksiti soruşsa konkret hesabla və aydın de: 12 ay üçün ümumi = qiymət × 1.16, aylıq = ümumi ÷ 12; 18 ay üçün ümumi = qiymət × 1.22, aylıq = ümumi ÷ 18. Rəqəmləri ₼ ilə göstər. Nümunə: 1000 ₼ məhsul → 12 ay: cəmi 1160 ₼, aylıq ~97 ₼; 18 ay: cəmi 1220 ₼, aylıq ~68 ₼.
 
 SİFARİŞ / REZERV:
 - Müştəri konkret məhsulu almaq/rezerv etmək istəyəndə, əvvəlcə ad-soyadını və telefon nömrəsini soruş.
@@ -136,31 +142,36 @@ func executeCreateOrder(args map[string]any) map[string]any {
 	return map[string]any{"status": "ok", "ref": fmt.Sprintf("LA-%06d", o.ID), "product": it.Name, "reserved_hours": 24}
 }
 
-// bir Gemini çağırışı — contents göndərir, cavab candidate content-ini (raw) və parts-ı qaytarır
-func geminiCall(apiKey, model string, contents []any, system string) (json.RawMessage, []geminiPart, error) {
+// bir Gemini çağırışı — contents göndərir; cavab content-i (raw), parts-ı, HTTP statusu və xətanı qaytarır.
+// status retry qərarı üçün lazımdır (503/429 → təkrar cəhd).
+func geminiCall(apiKey, model string, contents []any, system string) (json.RawMessage, []geminiPart, int, error) {
 	reqBody := map[string]any{
 		"system_instruction": map[string]any{"parts": []map[string]string{{"text": system}}},
 		"contents":           contents,
 		"tools":              []any{orderTool},
-		// Qeyd: thinkingConfig göndərilmir — cari flash modelləri (2026) bəzən onu rədd edir
+		// Qeyd: thinkingConfig göndərilmir — cari flash modelləri bəzən onu rədd edir
 		// (400 INVALID_ARGUMENT). maxOutputTokens düşünmə + cavabı əhatə etsin deyə yüksəkdir.
-		"generationConfig": map[string]any{"temperature": 0.6, "maxOutputTokens": 2048},
+		"generationConfig": map[string]any{"temperature": 0.6, "maxOutputTokens": 3072},
 	}
 	bb, _ := json.Marshal(reqBody)
 	url := "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent"
 	httpReq, _ := http.NewRequest("POST", url, bytes.NewReader(bb))
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-goog-api-key", apiKey)
-	client := &http.Client{Timeout: 40 * time.Second}
+	client := &http.Client{Timeout: 45 * time.Second}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err // şəbəkə/timeout — transient sayılır (status 0)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != 200 {
-		log.Printf("gemini error %d: %s", resp.StatusCode, string(raw))
-		return nil, nil, fmt.Errorf("gemini status %d", resp.StatusCode)
+		snippet := string(raw)
+		if len(snippet) > 1500 {
+			snippet = snippet[:1500]
+		}
+		log.Printf("gemini error %d (%s): %s", resp.StatusCode, model, snippet)
+		return nil, nil, resp.StatusCode, fmt.Errorf("gemini status %d", resp.StatusCode)
 	}
 	var gr struct {
 		Candidates []struct {
@@ -169,13 +180,39 @@ func geminiCall(apiKey, model string, contents []any, system string) (json.RawMe
 	}
 	json.Unmarshal(raw, &gr)
 	if len(gr.Candidates) == 0 {
-		return nil, nil, fmt.Errorf("boş cavab")
+		return nil, nil, 200, fmt.Errorf("boş cavab")
 	}
 	var parsed struct {
 		Parts []geminiPart `json:"parts"`
 	}
 	json.Unmarshal(gr.Candidates[0].Content, &parsed)
-	return gr.Candidates[0].Content, parsed.Parts, nil
+	return gr.Candidates[0].Content, parsed.Parts, 200, nil
+}
+
+// geminiGenerate — geminiCall üstündə etibarlılıq qatı:
+// transient xətalarda (503 overloaded / 429 quota / 500 / şəbəkə) qısa gözləmə ilə təkrar cəhd,
+// davam edərsə ehtiyat modelə keçir. Beləcə "AI cavab vermir" kəskin azalır.
+func geminiGenerate(apiKey string, models []string, contents []any, system string) (json.RawMessage, []geminiPart, error) {
+	var lastErr error
+	for _, model := range models {
+		for attempt := 0; attempt < 3; attempt++ {
+			raw, parts, status, err := geminiCall(apiKey, model, contents, system)
+			if err == nil {
+				return raw, parts, nil
+			}
+			lastErr = err
+			// 503 overloaded / 500 / şəbəkə → qısa gözləyib təkrar cəhd et.
+			// 429 (kvota) və 400/404 → təkrar ETMƏ (kvotaya retry onu daha da yeyir); birbaşa ehtiyat modelə.
+			transient := status == 500 || status == 503 || status == 0
+			if !transient {
+				break
+			}
+			if attempt < 2 {
+				time.Sleep(time.Duration(500*(attempt+1)) * time.Millisecond) // 0.5s, 1s
+			}
+		}
+	}
+	return nil, nil, lastErr
 }
 
 type geminiPart struct {
@@ -186,58 +223,45 @@ type geminiPart struct {
 	} `json:"functionCall"`
 }
 
-func aiChat(w http.ResponseWriter, r *http.Request) {
-	lang := r.URL.Query().Get("lang")
-	// bot / sui-istifadəyə qarşı: IP üzrə + günlük tavan
-	if ok, info := aiLimiter.allow(clientIP(r)); !ok {
-		writeJSON(w, 429, map[string]string{"error": rateLimitMsg(lang, info)})
-		return
-	}
+// aiReply — mesaj tarixçəsindən AI cavabı hazırlayır. Sayt/app/WhatsApp/Instagram —
+// HAMISI eyni beyindən keçir (Gemini + stok kataloqu + create_order alət döngüsü).
+func aiReply(msgs []aiMsg) (string, error) {
 	key := os.Getenv("GEMINI_API_KEY")
 	if key == "" {
-		writeJSON(w, 503, map[string]string{"error": "AI köməkçi hələ aktiv deyil"})
-		return
+		return "", fmt.Errorf("GEMINI_API_KEY yoxdur")
 	}
-	model := os.Getenv("GEMINI_MODEL")
-	if model == "" {
-		model = "gemini-flash-latest" // alias — həmişə cari flash modelinə işarə edir, köhnəlmir
+	// əsas model (güclü, ən yeni GA flash); GEMINI_MODEL secret-i varsa onu götürür.
+	primary := os.Getenv("GEMINI_MODEL")
+	if primary == "" {
+		primary = "gemini-3.5-flash"
 	}
-	var in struct {
-		Messages       []aiMsg `json:"messages"`
-		ConversationID string  `json:"conversation_id"` // söhbəti qruplaşdırmaq üçün (client yaradır)
-		Source         string  `json:"source"`          // web | app
+	// ehtiyat model — əsas model yüklənib/xəta versə avtomatik keçilir.
+	models := []string{primary}
+	if primary != "gemini-flash-latest" {
+		models = append(models, "gemini-flash-latest")
 	}
-	if err := decodeBody(r, &in); err != nil || len(in.Messages) == 0 {
-		writeJSON(w, 400, map[string]string{"error": "mesaj yoxdur"})
-		return
+	if len(msgs) > 24 {
+		msgs = msgs[len(msgs)-24:]
 	}
-	if len(in.Messages) > 24 {
-		in.Messages = in.Messages[len(in.Messages)-24:]
-	}
-	for i := range in.Messages {
-		if len(in.Messages[i].Text) > 1500 {
-			in.Messages[i].Text = in.Messages[i].Text[:1500]
+	for i := range msgs {
+		if len(msgs[i].Text) > 1500 {
+			msgs[i].Text = msgs[i].Text[:1500]
 		}
 	}
-
-	contents := make([]any, 0, len(in.Messages)+2)
-	for _, m := range in.Messages {
+	contents := make([]any, 0, len(msgs)+2)
+	for _, m := range msgs {
 		role := "user"
 		if m.Role == "assistant" {
 			role = "model"
 		}
 		contents = append(contents, map[string]any{"role": role, "parts": []any{map[string]any{"text": m.Text}}})
 	}
-
 	system := aiSystemPrompt + cachedCatalog()
-
-	// alət döngüsü — model create_order çağırarsa icra et, nəticəni geri göndər (maks 3 dövr)
 	var reply string
 	for iter := 0; iter < 3; iter++ {
-		rawContent, parts, err := geminiCall(key, model, contents, system)
+		rawContent, parts, err := geminiGenerate(key, models, contents, system)
 		if err != nil {
-			writeJSON(w, 502, map[string]string{"error": "AI cavab vermədi, bir azdan yenidən yoxlayın"})
-			return
+			return "", err
 		}
 		var call *struct {
 			Name string
@@ -254,7 +278,6 @@ func aiChat(w http.ResponseWriter, r *http.Request) {
 		}
 		if call != nil && call.Name == "create_order" {
 			result := executeCreateOrder(call.Args)
-			// modelin RAW cavabını (thought_signature daxil) geri qoy, sonra alət nəticəsini
 			var rawModel map[string]any
 			json.Unmarshal(rawContent, &rawModel)
 			contents = append(contents, rawModel)
@@ -265,12 +288,39 @@ func aiChat(w http.ResponseWriter, r *http.Request) {
 			reply = "" // final mətn növbəti dövrdən gələcək
 			continue
 		}
-		break // mətn cavabı gəldi
+		break
 	}
-
 	reply = strings.TrimSpace(reply)
 	if reply == "" {
 		reply = "Bağışlayın, cavab hazırlaya bilmədim. Zəhmət olmasa yenidən soruşun 🙏"
+	}
+	return reply, nil
+}
+
+func aiChat(w http.ResponseWriter, r *http.Request) {
+	lang := r.URL.Query().Get("lang")
+	// bot / sui-istifadəyə qarşı: IP üzrə + günlük tavan
+	if ok, info := aiLimiter.allow(clientIP(r)); !ok {
+		writeJSON(w, 429, map[string]string{"error": rateLimitMsg(lang, info)})
+		return
+	}
+	if os.Getenv("GEMINI_API_KEY") == "" {
+		writeJSON(w, 503, map[string]string{"error": "AI köməkçi hələ aktiv deyil"})
+		return
+	}
+	var in struct {
+		Messages       []aiMsg `json:"messages"`
+		ConversationID string  `json:"conversation_id"` // söhbəti qruplaşdırmaq üçün (client yaradır)
+		Source         string  `json:"source"`          // web | app
+	}
+	if err := decodeBody(r, &in); err != nil || len(in.Messages) == 0 {
+		writeJSON(w, 400, map[string]string{"error": "mesaj yoxdur"})
+		return
+	}
+	reply, err := aiReply(in.Messages)
+	if err != nil {
+		writeJSON(w, 502, map[string]string{"error": "AI cavab vermədi, bir azdan yenidən yoxlayın"})
+		return
 	}
 
 	// söhbəti admin panel üçün saxla (tam yazışma + yeni cavab)
