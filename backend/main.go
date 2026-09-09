@@ -142,6 +142,8 @@ func main() {
 	mux.HandleFunc("GET /api/public/products", publicProducts)
 	mux.HandleFunc("GET /api/public/products/{id}", publicProduct)
 	mux.HandleFunc("GET /api/public/categories", publicCategories)
+	mux.HandleFunc("GET /api/public/laptops", laptopsList)        // xarici laptops saytı: Mərkəz + stokda + aktiv Notebook
+	mux.HandleFunc("GET /api/public/laptops/{id}", laptopDetail) // eyni filtrlə detal
 	mux.HandleFunc("GET /api/public/languages", publicLanguages)
 	mux.HandleFunc("GET /api/public/i18n", publicI18n)
 	mux.HandleFunc("GET /api/public/terms", publicTerms)
