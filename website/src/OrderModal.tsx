@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api, thumbURL, money, type Product } from './api'
+import { api, thumbURL, money, finalPrice, hasDiscount, type Product } from './api'
 import { useI18n } from './i18n'
 import { PhIcon } from './ProductCard'
 
@@ -45,7 +45,7 @@ export default function OrderModal({ p, onClose }: { p: Product; onClose: () => 
               <div className="orditem">
                 <div className="th">{p.card_image ? <img src={thumbURL(p.card_image, 200)} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <PhIcon />}</div>
                 <div style={{ flex: 1 }}><div style={{ fontWeight: 700, fontSize: 14 }}>{p.name}</div><div className="muted" style={{ fontSize: 12 }}>{t('order.qty')}</div></div>
-                <span className="sg" style={{ fontSize: 17, fontWeight: 600 }}>{money(p.price)}</span>
+                <span className="sg" style={{ fontSize: 17, fontWeight: 600 }}>{money(finalPrice(p))}{hasDiscount(p) && <span className="old-price" style={{ marginLeft: 6 }}>{money(p.price)}</span>}</span>
               </div>
               <div className="field" style={{ marginBottom: 12 }}><label>{t('order.nameLabel')}</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('order.namePlaceholder')} /></div>
               <div className="field" style={{ marginBottom: 12 }}><label>{t('order.phoneLabel')}</label><input className="sg" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+994 __ ___ __ __" /></div>

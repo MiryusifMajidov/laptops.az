@@ -35,6 +35,10 @@ func calcHandler(w http.ResponseWriter, r *http.Request) {
 			branchIDs = append(branchIDs, uint(n))
 		}
 	}
+	// satıcı (admin deyil) yalnız öz filialını hesablaya bilər — seçim məcburi öz filialı
+	if bid, restricted := branchScope(r); restricted {
+		branchIDs = []uint{bid}
+	}
 	var cats []string
 	for _, s := range strings.Split(q.Get("categories"), ",") {
 		if t := strings.TrimSpace(s); t != "" {

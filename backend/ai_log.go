@@ -24,12 +24,18 @@ func logAiConversation(id, source, lang, ip string, msgs []aiMsg, reply string) 
 	if id == "" {
 		return
 	}
-	if source != "app" {
+	switch source {
+	case "app", "whatsapp", "instagram":
+		// olduğu kimi saxla
+	default:
 		source = "web"
 	}
 	full := make([]aiMsg, 0, len(msgs)+1)
 	full = append(full, msgs...)
 	full = append(full, aiMsg{Role: "assistant", Text: reply})
+	if len(full) > 80 { // uzun söhbətlərdə son 80 mesajı saxla (baza şişməsin)
+		full = full[len(full)-80:]
+	}
 	b, _ := json.Marshal(full)
 	now := time.Now()
 

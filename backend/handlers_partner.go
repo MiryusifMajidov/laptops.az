@@ -13,6 +13,7 @@ type notifItem struct {
 	Name      string    `json:"name"`
 	CardImage string    `json:"card_image"`
 	Price     float64   `json:"price"`
+	Discount  float64   `json:"discount"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -27,7 +28,7 @@ func publicNotifications(w http.ResponseWriter, r *http.Request) {
 	for i := range items {
 		applyItemLang(&items[i], lang, def) // adı seçilmiş dilə çevir
 		it := items[i]
-		out = append(out, notifItem{ID: it.ID, Name: it.Name, CardImage: it.CardImage, Price: it.Price, CreatedAt: it.CreatedAt})
+		out = append(out, notifItem{ID: it.ID, Name: it.Name, CardImage: it.CardImage, Price: it.Price, Discount: it.Discount, CreatedAt: it.CreatedAt})
 	}
 	writeJSON(w, 200, out)
 }

@@ -12,11 +12,13 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
     setBusy(true)
     setErr('')
     try {
-      const res = await api<{ token: string; role: string; name: string }>('/login', { method: 'POST', body: JSON.stringify({ username: u, password: p }) })
+      const res = await api<{ token: string; role: string; name: string; branch_id?: number; branch_name?: string }>('/login', { method: 'POST', body: JSON.stringify({ username: u, password: p }) })
       localStorage.setItem('auth', '1')
       localStorage.setItem('token', res.token)
       localStorage.setItem('role', res.role)
       localStorage.setItem('name', res.name)
+      localStorage.setItem('branch_id', String(res.branch_id ?? 0))
+      localStorage.setItem('branch_name', res.branch_name ?? '')
       onLogin()
     } catch (ex) {
       setErr((ex as Error).message)

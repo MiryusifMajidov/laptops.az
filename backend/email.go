@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/smtp"
@@ -53,6 +54,122 @@ func exportStock(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	w.Header().Set("Content-Disposition", "attachment; filename=laptops-cari-stok.xlsx")
 	w.Write(buf.Bytes())
+}
+
+// UTF-8 mövzunu MIME kodla (Azərbaycan hərfləri düzgün görünsün)
+func mimeSubject(s string) string {
+	return "=?UTF-8?B?" + base64.StdEncoding.EncodeToString([]byte(s)) + "?="
+}
+
+type composeAttach struct {
+	Name    string `json:"name"`
+	Content string `json:"content"` // base64 (data URL ola bilər)
+	Type    string `json:"type"`
+}
+
+// POST /api/mail/send  {to, subject, body, attachments[]} — istənilən ünvana mail (fayl əlavəsi ilə)
+func sendComposedMail(w http.ResponseWriter, r *http.Request) {
+	if !adminOnly(r) {
+		writeJSON(w, 403, map[string]string{"error": "yalnız admin"})
+		return
+	}
+	var in struct {
+		To          string          `json:"to"`
+		Subject     string          `json:"subject"`
+		Body        string          `json:"body"`
+		Attachments []composeAttach `json:"attachments"`
+	}
+	if err := decodeBody(r, &in); err != nil || strings.TrimSpace(in.To) == "" {
+		writeJSON(w, 400, map[string]string{"error": "alıcı ünvanı vacibdir"})
+		return
+	}
+	host, port := os.Getenv("SMTP_HOST"), os.Getenv("SMTP_PORT")
+	user, pass, from := os.Getenv("SMTP_USER"), os.Getenv("SMTP_PASS"), os.Getenv("SMTP_FROM")
+	if from == "" {
+		from = user
+	}
+	if host == "" || user == "" {
+		writeJSON(w, 400, map[string]string{"error": "SMTP hələ qoşulmayıb"})
+		return
+	}
+	var to []string
+	for _, e := range strings.Split(in.To, ",") {
+		if e = strings.TrimSpace(e); e != "" {
+			to = append(to, e)
+		}
+	}
+	msg := buildComposedMIME(from, to, in.Subject, in.Body, in.Attachments)
+	auth := smtp.PlainAuth("", user, pass, host)
+	if err := smtp.SendMail(host+":"+port, auth, from, to, msg); err != nil {
+		writeJSON(w, 500, map[string]string{"error": "göndərilmədi: " + err.Error()})
+		return
+	}
+	// "Göndərilənlər" qovluğuna yaz (tarixçədə görünsün)
+	names := make([]string, 0, len(in.Attachments))
+	for _, a := range in.Attachments {
+		names = append(names, a.Name)
+	}
+	nj, _ := json.Marshal(names)
+	db.Create(&IncomingMail{Box: "sent", FromAddr: from, ToAddr: strings.Join(to, ", "),
+		Subject: in.Subject, Body: in.Body, Attach: string(nj), ReceivedAt: time.Now(), Seen: true})
+	writeJSON(w, 200, map[string]any{"sent": true, "to": to})
+}
+
+func stripDataURL(s string) string {
+	if i := strings.Index(s, "base64,"); i >= 0 {
+		return s[i+7:]
+	}
+	return s
+}
+
+func writeB64Lines(b *bytes.Buffer, data []byte) {
+	enc := base64.StdEncoding.EncodeToString(data)
+	for i := 0; i < len(enc); i += 76 {
+		e := i + 76
+		if e > len(enc) {
+			e = len(enc)
+		}
+		b.WriteString(enc[i:e] + "\r\n")
+	}
+}
+
+func buildComposedMIME(from string, to []string, subject, body string, atts []composeAttach) []byte {
+	b := &bytes.Buffer{}
+	fmt.Fprintf(b, "From: %s\r\n", from)
+	fmt.Fprintf(b, "To: %s\r\n", strings.Join(to, ", "))
+	fmt.Fprintf(b, "Subject: %s\r\n", mimeSubject(subject))
+	b.WriteString("MIME-Version: 1.0\r\n")
+	if len(atts) == 0 {
+		b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+		b.WriteString("Content-Transfer-Encoding: base64\r\n\r\n")
+		writeB64Lines(b, []byte(body))
+		return b.Bytes()
+	}
+	boundary := "LAPTOPSAZCOMPOSEBDRY"
+	fmt.Fprintf(b, "Content-Type: multipart/mixed; boundary=%s\r\n\r\n", boundary)
+	fmt.Fprintf(b, "--%s\r\n", boundary)
+	b.WriteString("Content-Type: text/plain; charset=utf-8\r\n")
+	b.WriteString("Content-Transfer-Encoding: base64\r\n\r\n")
+	writeB64Lines(b, []byte(body))
+	b.WriteString("\r\n")
+	for _, a := range atts {
+		data, err := base64.StdEncoding.DecodeString(stripDataURL(a.Content))
+		if err != nil {
+			continue
+		}
+		ct := a.Type
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		fmt.Fprintf(b, "--%s\r\n", boundary)
+		fmt.Fprintf(b, "Content-Type: %s\r\n", ct)
+		b.WriteString("Content-Transfer-Encoding: base64\r\n")
+		fmt.Fprintf(b, "Content-Disposition: attachment; filename=\"%s\"\r\n\r\n", a.Name)
+		writeB64Lines(b, data)
+		b.WriteString("\r\n")
+	}
+	fmt.Fprintf(b, "--%s--\r\n", boundary)
+	return b.Bytes()
 }
 
 // ---- Mail şablonları ----

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -74,11 +75,31 @@ func userFromReq(r *http.Request) (User, bool) {
 		db.Where("token = ?", tok).Delete(&Session{})
 		return User{}, false
 	}
-	u := User{ID: s.UserID, Username: s.Username, Role: s.Role, Name: s.Name}
+	u := User{ID: s.UserID, Username: s.Username, Role: s.Role, Name: s.Name, BranchID: s.BranchID}
 	sessions.Lock()
 	sessions.m[tok] = sessEntry{u, s.ExpiresAt}
 	sessions.Unlock()
 	return u, true
+}
+
+// branchScope — cari istifadəçinin görə biləcəyi filialı təyin edir.
+// Qaytarır (branchID, restricted). restricted=true → yalnız həmin branchID görünməlidir.
+//   • satıcı (admin deyil) → HƏMİŞƏ öz filialı (branch_id param nəzərə alınmır). Filialı 0-dırsa fail-closed (heçnə).
+//   • admin → adətən hamısı (restricted=false); istəsə ?branch_id= ilə bir filialı seçə bilər.
+func branchScope(r *http.Request) (uint, bool) {
+	u, ok := userFromReq(r)
+	if !ok {
+		return 0, true // giriş yoxdursa heçnə göstərmə
+	}
+	if u.Role != "admin" {
+		return u.BranchID, true // satıcı: yalnız öz filialı (0 → heçnə)
+	}
+	if b := r.URL.Query().Get("branch_id"); b != "" {
+		if id, e := strconv.Atoi(b); e == nil && id > 0 {
+			return uint(id), true
+		}
+	}
+	return 0, false // admin: bütün filiallar
 }
 
 // POST /api/login
@@ -99,9 +120,16 @@ func login(w http.ResponseWriter, r *http.Request) {
 	sessions.Lock()
 	sessions.m[tok] = sessEntry{u, exp}
 	sessions.Unlock()
-	db.Create(&Session{Token: tok, UserID: u.ID, Username: u.Username, Role: u.Role, Name: u.Name, ExpiresAt: exp})
+	db.Create(&Session{Token: tok, UserID: u.ID, Username: u.Username, Role: u.Role, Name: u.Name, BranchID: u.BranchID, ExpiresAt: exp})
 	db.Where("expires_at < ?", time.Now()).Delete(&Session{}) // vaxtı keçmişləri təmizlə
-	writeJSON(w, 200, map[string]any{"token": tok, "role": u.Role, "name": u.Name, "username": u.Username})
+	branchName := ""
+	if u.BranchID != 0 {
+		var b Branch
+		if db.First(&b, u.BranchID).Error == nil {
+			branchName = b.Name
+		}
+	}
+	writeJSON(w, 200, map[string]any{"token": tok, "role": u.Role, "name": u.Name, "username": u.Username, "branch_id": u.BranchID, "branch_name": branchName})
 }
 
 // POST /api/logout

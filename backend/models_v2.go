@@ -9,6 +9,7 @@ type User struct {
 	PassHash string `json:"-"`
 	Role     string `json:"role"` // admin | user | partner
 	Name     string `json:"name"`
+	BranchID uint   `json:"branch_id"` // aid olduğu filial (satıcı yalnız öz filialını görür; admin hamısını)
 }
 
 // PartnerApplication — mobil tətbiqdən tərəfdaşlıq müraciəti (qeydiyyat əvəzi)

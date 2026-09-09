@@ -46,15 +46,19 @@ func lastCloseTime() time.Time {
 	return c.Date
 }
 
-// son bağlanışdan bəri kanal üzrə cəm (açıq kassa)
-func channelTotalsSince(since time.Time) (map[string]float64, float64) {
+// son bağlanışdan bəri kanal üzrə cəm (açıq kassa). branchID != 0 → yalnız o filial.
+func channelTotalsSince(since time.Time, branchID uint) (map[string]float64, float64) {
 	type row struct {
 		Channel string
 		Sum     float64
 	}
 	var rows []row
-	db.Model(&Sale{}).Select("channel, COALESCE(SUM(sale_price),0) as sum").
-		Where("sold_at > ? AND counted = ?", since, true).Group("channel").Scan(&rows)
+	q := db.Model(&Sale{}).Select("channel, COALESCE(SUM(sale_price),0) as sum").
+		Where("sold_at > ? AND counted = ?", since, true)
+	if branchID != 0 {
+		q = q.Where("branch_id = ?", branchID)
+	}
+	q.Group("channel").Scan(&rows)
 	m := map[string]float64{"cash": 0, "card": 0, "installment": 0, "credit": 0}
 	var total float64
 	for _, r := range rows {
@@ -67,7 +71,11 @@ func channelTotalsSince(since time.Time) (map[string]float64, float64) {
 // GET /api/kassa — açıq sessiya (son bağlanışdan bəri)
 func kassaHandler(w http.ResponseWriter, r *http.Request) {
 	since := lastCloseTime()
-	m, total := channelTotalsSince(since)
+	var kb uint // satıcı → öz filialı; admin → 0 (hamısı)
+	if bid, restricted := branchScope(r); restricted {
+		kb = bid
+	}
+	m, total := channelTotalsSince(since, kb)
 	var closes []DailyClose
 	db.Order("date desc").Limit(10).Find(&closes)
 	writeJSON(w, 200, map[string]any{
@@ -80,7 +88,7 @@ func kassaHandler(w http.ResponseWriter, r *http.Request) {
 // POST /api/kassa/close — açıq kassanı bağla → sıfırlanır (yenidən bağlamaq mümkün deyil)
 func createClose(w http.ResponseWriter, r *http.Request) {
 	since := lastCloseTime()
-	m, total := channelTotalsSince(since)
+	m, total := channelTotalsSince(since, 0)
 	if total == 0 {
 		writeJSON(w, 400, map[string]string{"error": "Bağlanacaq satış yoxdur — kassa artıq sıfırdır"})
 		return
@@ -117,19 +125,27 @@ type deadRow struct {
 
 // GET /api/reports
 func reportsHandler(w http.ResponseWriter, r *http.Request) {
+	bid, restricted := branchScope(r) // satıcı → yalnız öz filialı
+
 	var top []topRow
-	db.Model(&Sale{}).Select("items.name as name, count(*) as count").
+	topQ := db.Model(&Sale{}).Select("items.name as name, count(*) as count").
 		Joins("JOIN items ON items.id = sales.item_id").
-		Where("sales.counted = ?", true).
-		Group("items.name").Order("count desc").Limit(5).Scan(&top)
+		Where("sales.counted = ?", true)
+	if restricted {
+		topQ = topQ.Where("sales.branch_id = ?", bid)
+	}
+	topQ.Group("items.name").Order("count desc").Limit(5).Scan(&top)
 
 	var perf []perfRow
-	db.Model(&Sale{}).Select("branches.name as name, COALESCE(SUM(sales.profit),0) as profit").
+	perfQ := db.Model(&Sale{}).Select("branches.name as name, COALESCE(SUM(sales.profit),0) as profit").
 		Joins("JOIN branches ON branches.id = sales.branch_id").
-		Where("sales.counted = ?", true).
-		Group("branches.name").Order("profit desc").Scan(&perf)
+		Where("sales.counted = ?", true)
+	if restricted {
+		perfQ = perfQ.Where("sales.branch_id = ?", bid)
+	}
+	perfQ.Group("branches.name").Order("profit desc").Scan(&perf)
 
-	var inStock []Item
+	var inStock []Item // ölü stok — anbar bütün filiallara açıq (qlobal)
 	db.Where("status = ?", "in_stock").Find(&inStock)
 	dead := []deadRow{}
 	for _, it := range inStock {

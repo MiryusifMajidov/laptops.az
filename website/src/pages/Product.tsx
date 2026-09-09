@@ -100,8 +100,12 @@ export default function Product() {
 
           {specs.length > 0 && (
             <div className="specs">
-              {specs.map((v) => (
-                <div className="specbox" key={v.attribute_id}><div className="l">{tt(v.attribute?.name ?? '')}</div><div className="v">{tt(v.value)}</div></div>
+              {Object.entries(specs.reduce((acc, v) => {
+                const n = v.attribute?.name ?? ''
+                ;(acc[n] ||= []).push(v.value)
+                return acc
+              }, {} as Record<string, string[]>)).map(([name, vals]) => (
+                <div className="specbox" key={name}><div className="l">{tt(name)}</div><div className="v">{vals.map((x) => tt(x)).join(', ')}</div></div>
               ))}
             </div>
           )}
