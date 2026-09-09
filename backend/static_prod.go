@@ -36,7 +36,12 @@ func spaHandler(root fs.FS) http.Handler {
 			return
 		}
 		if f, err := root.Open(p); err == nil {
+			info, _ := f.Stat()
 			f.Close()
+			if info != nil && info.IsDir() {
+				http.Error(w, "forbidden", http.StatusForbidden) // qovluq siyahısı qadağandır
+				return
+			}
 			fileServer.ServeHTTP(w, r)
 			return
 		}
@@ -51,5 +56,39 @@ func mountStatic(mux *http.ServeMux) {
 	siteSub, _ := fs.Sub(siteFiles, "web/site")
 	mux.Handle("/sirab/", http.StripPrefix("/sirab", spaHandler(adminSub)))
 	mux.Handle("/sirab", http.RedirectHandler("/sirab/", http.StatusMovedPermanently))
-	mux.Handle("/", spaHandler(siteSub))
+	mux.Handle("/", siteHandler(siteSub))
+}
+
+// siteHandler — müştəri saytı: statik fayl, SPA fallback + /mehsul/{id} üçün SEO meta inject.
+func siteHandler(root fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(root))
+	index, _ := fs.ReadFile(root, "index.html")
+	serveHTML := func(w http.ResponseWriter, b []byte) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(b)
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if p == "" || p == "." {
+			serveHTML(w, index)
+			return
+		}
+		if f, err := root.Open(p); err == nil { // real statik fayl
+			info, _ := f.Stat()
+			f.Close()
+			if info != nil && info.IsDir() {
+				http.Error(w, "forbidden", http.StatusForbidden) // qovluq siyahısı qadağandır
+				return
+			}
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(p, "mehsul/") { // məhsul səhifəsi → SEO meta
+			if m, ok := productMeta(strings.TrimPrefix(p, "mehsul/")); ok {
+				serveHTML(w, injectSEO(index, m))
+				return
+			}
+		}
+		serveHTML(w, index) // digər SPA yolları
+	})
 }

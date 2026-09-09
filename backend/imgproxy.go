@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
@@ -28,7 +29,37 @@ import (
 // Kart/siyahı üçün kiçik, sıxılmış JPEG qaytarır (tam ölçü yalnız məhsul detailində).
 // Mənbə: lokal "/uploads/.." VƏ YA xarici http(s) URL. Nəticə diskdə (imgcache/) keşlənir.
 // Xarici kitabxana yoxdur — sırf stdlib (CGO_ENABLED=0 ilə uyğun).
-var imgHTTP = &http.Client{Timeout: 15 * time.Second}
+// SSRF qoruması: HƏR bağlantıda (ilkin + hər redirect hop) real IP yoxlanır və
+// məhz həmin IP-yə dial olunur (yenidən resolve yox → DNS rebinding bağlanır).
+var imgHTTP = &http.Client{
+	Timeout: 15 * time.Second,
+	CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+		if len(via) >= 3 {
+			return fmt.Errorf("çox redirect")
+		}
+		return nil // hər hop onsuz da dial anında yoxlanır
+	},
+	Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(addr)
+			if err != nil {
+				return nil, err
+			}
+			ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+			if err != nil || len(ips) == 0 {
+				return nil, fmt.Errorf("host resolve olunmadı")
+			}
+			for _, ip := range ips {
+				if isBadIP(ip) {
+					return nil, fmt.Errorf("qadağan ünvan")
+				}
+			}
+			// yoxlanmış IP-yə birbaşa dial (yenidən DNS sorğusu olmur)
+			d := net.Dialer{Timeout: 8 * time.Second}
+			return d.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
+		},
+	},
+}
 
 const imgUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 
@@ -59,9 +90,14 @@ func imgResizeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "şəkil alınmadı", http.StatusBadGateway)
 		return
 	}
+	// yalnız şəkil qəbul et — qeyri-şəkil (HTML/JSON) cavabı geri qaytarma (məlumat sızması)
+	if !strings.HasPrefix(http.DetectContentType(raw), "image/") {
+		http.Error(w, "şəkil deyil", http.StatusBadGateway)
+		return
+	}
 	out, err := resizeToJPEG(raw, width)
 	if err != nil {
-		// dekod olunmadı (məs. webp) → orijinalı olduğu kimi ver (keşləmə)
+		// dekod olunmadı (məs. webp) → orijinalı olduğu kimi ver (artıq image təsdiqlənib)
 		writeImg(w, raw)
 		return
 	}
@@ -110,7 +146,13 @@ func fetchImageBytes(src string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(resp.Body, 25<<20)) // maks 25MB
 }
 
-// daxili/şəbəkə ünvanlarına sorğunu blokla (SSRF)
+// isBadIP — daxili/şəbəkə ünvanları (SSRF hədəfləri: loopback, private, link-local…)
+func isBadIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
+}
+
+// isBlockedHost — ilkin sürətli yoxlama (əsas müdafiə dial anındadır: hər hop yoxlanır).
 func isBlockedHost(host string) bool {
 	if host == "" || strings.EqualFold(host, "localhost") {
 		return true
@@ -120,7 +162,7 @@ func isBlockedHost(host string) bool {
 		return true
 	}
 	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		if isBadIP(ip) {
 			return true
 		}
 	}
