@@ -77,6 +77,7 @@ func initDB() {
 	applyIncrementalSync()       // yeni Excel versiyasından inkremental əlavələr (add/sales/realiz)
 	applyBranchSync()            // Zaur/Elçin filial uyğunlaşdırması (moves/adds/completes)
 	deleteSerialessZaurLaptops() // Excel-də seriyası olmayan seriyasız Zaur laptopları sil
+	applyReconcile202609()       // 2026-09 uzlaşdırma auditi: realizasiya/filial/maya düzəlişləri
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi

@@ -55,3 +55,8 @@ Thumbs.db
 *.swp
 *.swo
 *.log
+
+# iş qalıqları (screenshot qovluqları)
+shots/
+shots_65/
+shots_ok/
