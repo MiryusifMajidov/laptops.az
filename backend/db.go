@@ -78,6 +78,7 @@ func initDB() {
 	applyBranchSync()            // Zaur/Elçin filial uyğunlaşdırması (moves/adds/completes)
 	deleteSerialessZaurLaptops() // Excel-də seriyası olmayan seriyasız Zaur laptopları sil
 	applyReconcile202609()       // 2026-09 uzlaşdırma auditi: realizasiya/filial/maya düzəlişləri
+	applyCreditBackfill202609()  // Excel «KREDIT» vərəqi → credit_plans (ilkin ödəniş 0, ilk ödəniş +1 ay)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
