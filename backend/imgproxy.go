@@ -63,6 +63,16 @@ var imgHTTP = &http.Client{
 
 const imgUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 
+// Yaddaş qoruması (2026-09-12 OOM-dan sonra əlavə olundu).
+// Hadisə: proses 412MB-a çatdı və 512MB-lıq maşında OOM ilə öldürüldü, sayt qısa müddət çökdü.
+// Səbəb: böyük şəkil dekod olunanda bir anda onlarla/yüzlərlə MB tutur; paralel sorğularda cəmlənir.
+var imgSem = make(chan struct{}, 2) // eyni anda maksimum 2 şəkil emalı
+
+const (
+	imgMaxBytes  = 12 << 20 // endirilən mənbə şəkil üçün maksimum ölçü
+	imgMaxPixels = 30 << 20 // bundan böyük şəkil ümumiyyətlə dekod edilmir
+)
+
 func imgResizeHandler(w http.ResponseWriter, r *http.Request) {
 	src := strings.TrimSpace(r.URL.Query().Get("u"))
 	if src == "" {
@@ -95,9 +105,12 @@ func imgResizeHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "şəkil deyil", http.StatusBadGateway)
 		return
 	}
+	// Növbə: eyni anda yalnız 2 emal. Paralel dekodlar yaddaşı cəmləyib maşını çökdürürdü.
+	imgSem <- struct{}{}
 	out, err := resizeToJPEG(raw, width)
+	<-imgSem
 	if err != nil {
-		// dekod olunmadı (məs. webp) → orijinalı olduğu kimi ver (artıq image təsdiqlənib)
+		// dekod olunmadı (məs. webp) və ya çox böyükdür → orijinalı olduğu kimi ver
 		writeImg(w, raw)
 		return
 	}
@@ -143,7 +156,7 @@ func fetchImageBytes(src string) ([]byte, error) {
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("status %d", resp.StatusCode)
 	}
-	return io.ReadAll(io.LimitReader(resp.Body, 25<<20)) // maks 25MB
+	return io.ReadAll(io.LimitReader(resp.Body, imgMaxBytes)) // yaddaş qoruması
 }
 
 // isBadIP — daxili/şəbəkə ünvanları (SSRF hədəfləri: loopback, private, link-local…)
@@ -171,6 +184,15 @@ func isBlockedHost(host string) bool {
 
 // resizeToJPEG — şəkli en=width-ə qədər kiçildir (nisbət qorunur), ağ fona flatten edir, JPEG q82 verir.
 func resizeToJPEG(raw []byte, width int) ([]byte, error) {
+	// Əvvəlcə YALNIZ başlıq oxunur (ucuzdur). Ölçünü bilmədən dekod etmək təhlükəlidir:
+	// məs. 24 megapiksel PNG dekod olunanda ~100MB RAM tutur.
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width*cfg.Height > imgMaxPixels {
+		return nil, fmt.Errorf("şəkil çox böyükdür: %dx%d", cfg.Width, cfg.Height)
+	}
 	src, _, err := image.Decode(bytes.NewReader(raw))
 	if err != nil {
 		return nil, err

@@ -8,6 +8,9 @@ primary_region = "fra"   # Frankfurt (Azərbaycana yaxın Avropa mərkəzi)
 
 [env]
   PORT = "8080"
+  # Yaddaş tavanı (2026-09-12 OOM-dan sonra): Go zibil yığıcısı 350MB-a yaxınlaşanda
+  # sərtləşir və maşın (512MB) çökmür. Həmin gün proses 412MB-a çatıb öldürülmüşdü.
+  GOMEMLIMIT = "350MiB"
 
 # Kalıcı disk — bütün data (laptops.db + şəkillər) burada saxlanır, deploy-larda İTMİR.
 [[mounts]]
@@ -21,9 +24,11 @@ primary_region = "fra"   # Frankfurt (Azərbaycana yaxın Avropa mərkəzi)
 [http_service]
   internal_port = 8080
   force_https = true            # http → https avtomatik
-  auto_stop_machines = "off"    # həmişə oyaq (SEO + sürət üçün; kreditdən ödənir)
+  # Xərcə görə (2026-09-12): boş qalanda maşın dayanır, sorğu gələndə özü oyanır.
+  # Go binary olduğu üçün oyanma ~1-2 saniyədir (Next.js kimi 30s deyil).
+  auto_stop_machines = "stop"
   auto_start_machines = true
-  min_machines_running = 1      # ən azı 1 maşın həmişə işləyir
+  min_machines_running = 0
 
 [[vm]]
   size = "shared-cpu-1x"
