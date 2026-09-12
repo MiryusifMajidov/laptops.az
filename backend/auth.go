@@ -142,6 +142,38 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 
+// DELETE /api/account — istifadəçi ÖZ hesabını tamamilə silir.
+// App Store 5.1.1(v): hesab yaratmağa imkan verən tətbiq hesabın silinməsini də
+// tətbiq daxilində təklif etməlidir (müvəqqəti deaktivləşdirmə kifayət deyil).
+func deleteAccount(w http.ResponseWriter, r *http.Request) {
+	u, ok := userFromReq(r)
+	if !ok {
+		writeJSON(w, 401, map[string]string{"error": "giriş tələb olunur"})
+		return
+	}
+	// Admin hesabı yalnız admin paneldən idarə olunur — mağazanı təsadüfən idarəsiz qoymamaq üçün.
+	if u.Role == "admin" {
+		writeJSON(w, 403, map[string]string{"error": "admin hesabı tətbiqdən silinmir"})
+		return
+	}
+	// 1) bütün aktiv sessiyaları bağla (yaddaş keşi + DB)
+	sessions.Lock()
+	for tok, e := range sessions.m {
+		if e.u.ID == u.ID {
+			delete(sessions.m, tok)
+		}
+	}
+	sessions.Unlock()
+	db.Where("user_id = ?", u.ID).Delete(&Session{})
+	// 2) şəxsi məlumat qalmasın — tərəfdaşlıq müraciəti də silinir
+	if u.Name != "" {
+		db.Where("name = ?", u.Name).Delete(&PartnerApplication{})
+	}
+	// 3) hesabın özü (audit jurnalı middleware tərəfindən onsuz da yazılır)
+	db.Delete(&User{}, u.ID)
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
 // POST /api/change-password  {old, new}
 func changePassword(w http.ResponseWriter, r *http.Request) {
 	u, ok := userFromReq(r)

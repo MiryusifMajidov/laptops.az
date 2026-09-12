@@ -86,6 +86,7 @@ func main() {
 	// auth / rol / audit
 	mux.HandleFunc("POST /api/logout", logout)
 	mux.HandleFunc("POST /api/change-password", changePassword)
+	mux.HandleFunc("DELETE /api/account", deleteAccount) // App Store 5.1.1(v): hesabı silmək
 	mux.HandleFunc("GET /api/audit", listAudit)
 	mux.HandleFunc("GET /api/ai-chats", listAiChats)      // AI köməkçi söhbətləri (admin)
 	mux.HandleFunc("GET /api/ai-chats/{id}", getAiChat)

@@ -86,6 +86,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Hesabın silinməsi (App Store 5.1.1(v) tələbi).
+  /// Təsadüfən basılmasın deyə əvvəlcə təsdiq soruşulur, sonra hesab serverdə tamamilə silinir.
+  Future<void> _confirmDeleteAccount() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: C.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text(t('profile.deleteTitle'),
+            style: mr(size: 16.5, weight: FontWeight.w800, color: C.ink)),
+        content: Text(t('profile.deleteBody'),
+            style: mr(size: 13.5, weight: FontWeight.w500, color: C.muted2, height: 1.5)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(t('profile.cancel'),
+                style: mr(size: 14, weight: FontWeight.w700, color: C.muted2)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(t('profile.deleteConfirm'),
+                style: mr(size: 14, weight: FontWeight.w800, color: const Color(0xFFD92D20))),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      await Api.deleteAccount();
+      if (!mounted) return;
+      _toast(t('profile.deleted'));
+      Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const RootScaffold()), (r) => false);
+    } catch (e) {
+      _toast(e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -135,6 +176,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
             style: mr(size: 13.5, weight: FontWeight.w500, color: C.muted2, height: 1.5)),
         const SizedBox(height: 28),
         _btn(t('profile.logout'), _logout, outline: true),
+        const SizedBox(height: 12),
+        // Hesabın silinməsi — App Store 5.1.1(v) tələbi
+        TextButton(
+          onPressed: _busy ? null : _confirmDeleteAccount,
+          style: TextButton.styleFrom(
+            minimumSize: const Size.fromHeight(50),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          child: Text(t('profile.deleteAccount'),
+              style: mr(size: 14.5, weight: FontWeight.w800, color: const Color(0xFFD92D20))),
+        ),
+        const SizedBox(height: 4),
+        Text(t('profile.deleteHint'),
+            textAlign: TextAlign.center,
+            style: mr(size: 11.5, weight: FontWeight.w500, color: C.muted2, height: 1.4)),
       ],
     );
   }

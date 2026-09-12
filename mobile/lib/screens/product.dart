@@ -187,8 +187,9 @@ class _ProductScreenState extends State<ProductScreen> {
   }
 
   Widget _specGrid(Product p) {
-    // ilk 4 (boş olmayan) xüsusiyyəti 2x2 grid-də göstər
-    final specs = p.values.where((v) => v.value.isNotEmpty).take(4).toList();
+    // BÜTÜN (boş olmayan) xüsusiyyətlər 2 sütunlu grid-də göstərilir.
+    // Əvvəl .take(4) vardı — məhsulun qalan xüsusiyyətləri gizli qalırdı.
+    final specs = p.values.where((v) => v.value.isNotEmpty).toList();
     if (specs.isEmpty) return const SizedBox.shrink();
     return GridView.count(
       shrinkWrap: true,

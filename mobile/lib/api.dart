@@ -285,6 +285,21 @@ class Api {
     throw ApiException(_errOf(r));
   }
 
+  /// Hesabı tamamilə silir (App Store 5.1.1(v)). Uğurlu olsa lokal sessiya da təmizlənir.
+  static Future<void> deleteAccount() async {
+    late http.Response r;
+    try {
+      r = await http.delete(_authU('/account'), headers: _authHeaders()).timeout(_timeout);
+    } catch (_) {
+      throw ApiException('Serverə qoşulmaq alınmadı.');
+    }
+    if (r.statusCode >= 200 && r.statusCode < 300) {
+      await Store.I.logout();
+      return;
+    }
+    throw ApiException(_errOf(r));
+  }
+
   static Future<void> partnerApply({required String name, required String storeName, required String phone}) async {
     late http.Response r;
     try {
