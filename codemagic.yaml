@@ -21,6 +21,23 @@ workflows:
     working_directory: mobile
     integrations:
       app_store_connect: laptops_az_asc_key   # ← Codemagic-dəki API key inteqrasiyasının ADI
+    # Build ƏL İLƏ başladılmasın: mobile/ və ya bu fayl dəyişib push olunanda
+    # Codemagic webhook-u özü build-i işə salır (UI-da "Start new build" lazım deyil).
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: master
+          include: true
+          source: true
+        - pattern: apk-build
+          include: true
+          source: true
+      when:
+        changeset:
+          includes:
+            - "mobile"
+            - "codemagic.yaml"
     environment:
       flutter: stable                          # lazım olsa dəqiq versiyaya pin et
       xcode: latest
@@ -32,13 +49,30 @@ workflows:
         script: keychain initialize
       - name: Sertifikat + provisioning profili yarat/gətir
         script: |
-          # Təzə hesabda distribution sertifikatı yoxdur — onu yaratmaq üçün
-          # private key lazımdır. Build maşınında bir RSA açar yaradıb ötürürük.
+          # Hər build təzə RSA açar yaradır → təzə distribution sertifikatı lazım olur.
+          # Apple-ın distribution sertifikat limiti (2-3) dolanda Apple 409 qaytarır və
+          # build dayanırdı (əvvəl developer.apple.com-dan ƏL İLƏ revoke edilirdi).
+          # Aşağıdaki fallback onu avtomatlaşdırır: köhnə sertifikatların private key-i
+          # onsuz da bizdə yoxdur (hər dəfə atılan açar) → istifadəsizdirlər, ləğv etmək
+          # təhlükəsizdir və App Store-da olan buraxılışlara təsir etmir.
           openssl genrsa -out /tmp/cert_key.pem 2048
-          app-store-connect fetch-signing-files "az.laptops.laptopsAz" \
-            --type IOS_APP_STORE \
-            --certificate-key=@file:/tmp/cert_key.pem \
-            --create
+          fetch_signing() {
+            app-store-connect fetch-signing-files "az.laptops.laptopsAz" \
+              --type IOS_APP_STORE \
+              --certificate-key=@file:/tmp/cert_key.pem \
+              --create
+          }
+          if ! fetch_signing; then
+            echo "!! İmzalama faylları alınmadı — ehtimal 409 (sertifikat limiti). Köhnə distribution sertifikatları ləğv edilir."
+            for cid in $(app-store-connect certificates list --certificate-type IOS_DISTRIBUTION --json 2>/dev/null \
+                          | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' \
+                          | sed 's/.*"\([^"]*\)"$/\1/' | head -5); do
+              echo "   ləğv: $cid"
+              app-store-connect certificates delete "$cid" --yes 2>/dev/null || true
+            done
+            # təkrar cəhd — limit boşaldıqdan sonra
+            fetch_signing
+          fi
       - name: Sertifikatı keychain-ə əlavə et
         script: keychain add-certificates
       - name: Xcode imzalamasını qur

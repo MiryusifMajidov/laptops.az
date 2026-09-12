@@ -98,12 +98,59 @@ First release: product catalog, AI assistant, simple ordering, multi-language UI
 ```
 - No account is required to browse or place an order. Ordering only needs a name and phone number; no payment is taken in the app (purchases are completed in-store).
 - "Partner" login is optional and only for wholesale store partners. Demo partner account (if the reviewer wants to test wholesale prices):
-    username: <DOLDUR>
-    password: <DOLDUR>
+    username: appledemo
+    password: <DOLDUR — App Store Connect-də saxlanan parol>
+- Account deletion (Guideline 5.1.1(v)): Profile tab -> sign in -> red "Hesabı sil" (Delete account) button
+  directly below "Çıxış" (Log out) -> confirm. This performs a full, permanent server-side deletion
+  (user record, all sessions, and the partnership application submitted under that name). It is not a
+  deactivation, and it requires no call or email to support.
 - The AI assistant is powered by Google Gemini via our backend.
 - Contact: info@laptops.az
 ```
 > ⚠️ Reviewer partnyor rejimini yoxlaya bilsin deməli test hesabı ver (yoxsa "sign-in required" rədd riski). Admin paneldən bir demo partner hesabı yarat və yuxarıya yaz.
+
+---
+
+## Apple 5.1.1(v) rəddinə CAVAB — Resolution Center-ə olduğu kimi köçür (ingiliscə)
+
+```
+Hello,
+
+Thank you for the review. Build 4 of version 1.0.0 adds in-app account deletion, as required by
+Guideline 5.1.1(v).
+
+Where to find it:
+1. Open the app and select the "Profil" (Profile) tab — the last tab in the bottom bar.
+2. Sign in with the demo partner account listed in App Review Information.
+3. On the profile screen, directly below "Çıxış" (Log out), tap the red button
+   "Hesabı sil" (Delete account).
+4. A confirmation dialog appears — tap "Bəli, sil" (Yes, delete).
+
+This immediately and permanently deletes the account together with the personal data associated
+with it on our server: the user record, every active session, and the partnership application that
+was submitted under that name. It is a full deletion, not a deactivation or a temporary disable,
+and it does not require the user to call or email customer support. After deletion the app returns
+to the signed-out state.
+
+Please note that because the deletion is real and permanent, the demo account will no longer exist
+after you have tested the flow. If you need to sign in again at any point, please let us know in
+this thread and we will recreate it immediately.
+
+One further change in this build: the product detail screen now lists all specifications of a
+device (previously only the first four were shown).
+
+Thank you for your time.
+
+Laptops.az
+```
+
+**Bu cavabla birlikdə nə lazımdır:**
+- Apple «screen recording captured on a physical device» istəyib. Ekran yazısı **iPhone-da** çəkilməlidir
+  (TestFlight-dan build 4 quraşdırılır → Profil → giriş → «Hesabı sil» → «Bəli, sil» → çıxış ekranı).
+  Yazını Resolution Center-də cavaba **attachment** kimi əlavə et.
+- Yoxlayıcı silmə axınını test edəndən sonra `appledemo` hesabı **həqiqətən silinir** →
+  növbəti submission-dan əvvəl admin panel → Tərəfdaşlıq → partner hesabı yenidən yarat
+  (ad: `appledemo`, rol: partner) və parolu App Store Connect-dəki ilə eyni qoy.
 
 ## Age Rating anketi — cavablar
 Demək olar hamısına **None/No**: zorakılıq yox, cinsi məzmun yox, qumar yox, məhdud maddələr yox → nəticə **4+**.
