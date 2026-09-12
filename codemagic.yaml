@@ -21,8 +21,11 @@ workflows:
     working_directory: mobile
     integrations:
       app_store_connect: laptops_az_asc_key   # ← Codemagic-dəki API key inteqrasiyasının ADI
-    # Build ƏL İLƏ başladılmasın: mobile/ və ya bu fayl dəyişib push olunanda
-    # Codemagic webhook-u özü build-i işə salır (UI-da "Start new build" lazım deyil).
+    # master/apk-build-ə push olunanda Codemagic webhook-u build-i özü işə salır
+    # (UI-da "Start new build" lazım deyil; webhook qurulmayıbsa əl ilə başlat).
+    # QEYD: `when:` buraya (triggering-in içinə) QOYULMUR — Codemagic
+    # "extra fields not permitted" validasiya xətası verir. Yol filtri lazım olsa
+    # workflow səviyyəsində ayrıca `when:` açarı kimi yazılmalıdır.
     triggering:
       events:
         - push
@@ -33,11 +36,6 @@ workflows:
         - pattern: apk-build
           include: true
           source: true
-      when:
-        changeset:
-          includes:
-            - "mobile"
-            - "codemagic.yaml"
     environment:
       flutter: stable                          # lazım olsa dəqiq versiyaya pin et
       xcode: latest
