@@ -122,6 +122,8 @@ func applySync20260913b() {
 			continue
 		}
 		db.Model(&it).Update("serial", m.To)
+		// realizasiya sətri seriyanın öz kopyasını saxlayır (Realizasiya səhifəsi onu göstərir) — onu da düzəlt
+		db.Model(&Consignment{}).Where("item_id = ?", it.ID).Update("serial", m.To)
 		nSerial++
 	}
 
@@ -204,6 +206,12 @@ func applySync20260913b() {
 			skip("close_consignment_sold(mal)", m.ConsignmentID)
 			continue
 		}
+		var have int64
+		db.Model(&Sale{}).Where("item_id = ?", it.ID).Count(&have)
+		if have > 0 { // yarımçıq qalmış əvvəlki işləmə — ikinci satış yaratma
+			skip("close_consignment_sold(artıq satış var)", m.ConsignmentID)
+			continue
+		}
 		sale := Sale{ItemID: it.ID, SalePrice: m.SalePrice, Quantity: 1, Profit: m.SalePrice - it.Cost,
 			Channel: "cash", BranchID: it.BranchID, SoldAt: f2date(m.SoldAt), Counted: true}
 		if err := db.Create(&sale).Error; err != nil || sale.ID == 0 {
@@ -276,8 +284,10 @@ func applySync20260913b() {
 			continue
 		}
 		id, sid := it.ID, sale.ID
-		db.Create(&Consignment{StoreName: m.StoreName, ItemID: &id, ItemName: it.Name, Serial: it.Serial,
-			GivenAt: f2date(m.GivenAt), Cost: it.Cost, GivenPrice: m.SalePrice, Status: "sold_paid", Debt: 0, SaleID: &sid})
+		if err := db.Create(&Consignment{StoreName: m.StoreName, ItemID: &id, ItemName: it.Name, Serial: it.Serial,
+			GivenAt: f2date(m.GivenAt), Cost: it.Cost, GivenPrice: m.SalePrice, Status: "sold_paid", Debt: 0, SaleID: &sid}).Error; err != nil {
+			fail("sell_consignment_item(realizasiya sətri)", it.ID, err) // satış yazılıb — mal yenə «satıldı» olur
+		}
 		db.Model(&it).Updates(map[string]any{"status": "sold", "quantity": 0, "show_on_site": false})
 		nSellC++
 	}
