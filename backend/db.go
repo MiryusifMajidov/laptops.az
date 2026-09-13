@@ -86,6 +86,7 @@ func initDB() {
 	applyFix6202609()            // səhvən yaradılmış 10 boş məhsul qeydi (istifadəçi göstərişi)
 	applyFix7202609()            // kredit köçürməsinin təmizlənməsi (47 sil + 3 bərpa)
 	applySync20260913()          // Excel 10→13 sentyabr: yeni mallar, satışlar, realizasiya, transfer
+	applySync20260913b()         // Excel ↔ DB əvvəldən qalmış fərqlərin düzəlişi (2-ci dalğa)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
