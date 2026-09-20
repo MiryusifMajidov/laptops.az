@@ -10,6 +10,9 @@ final ValueNotifier<int> foregroundPushTick = ValueNotifier<int>(0);
 class PushDiag {
   static String firebase = '—';
   static String permission = '—';
+
+  /// iOS-un özündən gələn qeydiyyat nəticəsi (AppDelegate yazır): OK / XƏTA: …
+  static String native = '—';
   static String apns = '—';
   static String fcm = '—';
   static String topic = '—';
@@ -21,6 +24,7 @@ class PushDiag {
   static String get summary => [
         'Firebase: $firebase',
         'İcazə: $permission',
+        'iOS qeydiyyatı: $native',
         'APNs token: $apns',
         'FCM token: $fcm',
         'Topic (new_products): $topic',

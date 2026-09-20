@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'config.dart';
 import 'store.dart';
 import 'i18n.dart';
@@ -47,6 +48,9 @@ Future<void> _subscribeWithRetry(FirebaseMessaging m) async {
   for (var attempt = 0; attempt < 24; attempt++) {
     try {
       if (Platform.isIOS) {
+        // AppDelegate-in yazdığı nəticə: qeydiyyat alındımı, alınmadısa səbəbi nədir
+        PushDiag.native =
+            (await SharedPreferences.getInstance()).getString('apns_status') ?? '—';
         final apns = await m.getAPNSToken();
         PushDiag.apns = apns == null ? 'yoxdur' : 'var (${_tokTail(apns)})';
         if (apns == null) {
