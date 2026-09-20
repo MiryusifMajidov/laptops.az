@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../api.dart';
 import '../config.dart';
+import '../notif_bus.dart';
 import '../theme.dart';
 import 'product.dart';
 import 'order_form.dart';
@@ -78,9 +80,29 @@ Future<void> showServerDialog(BuildContext context) async {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: C.line),
+          const SizedBox(height: 10),
+          Text('Push diaqnostikası',
+              style: mr(size: 12.5, weight: FontWeight.w800, color: C.ink)),
+          const SizedBox(height: 4),
+          Text(PushDiag.summary,
+              style: mr(size: 11.5, weight: FontWeight.w500, color: C.muted2, height: 1.45)),
         ],
       ),
       actions: [
+        TextButton(
+          onPressed: () async {
+            await Clipboard.setData(
+                ClipboardData(text: '${PushDiag.summary}\nFCM tam: ${PushDiag.fcmFull}'));
+            if (ctx.mounted) {
+              ScaffoldMessenger.of(ctx).showSnackBar(
+                const SnackBar(content: Text('Diaqnostika kopyalandı')),
+              );
+            }
+          },
+          child: Text('Kopyala', style: mr(size: 14, weight: FontWeight.w700, color: C.muted2)),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(ctx, false),
           child: Text('Ləğv et', style: mr(size: 14, weight: FontWeight.w700, color: C.muted2)),

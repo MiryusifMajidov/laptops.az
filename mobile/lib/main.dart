@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
@@ -20,22 +21,54 @@ Future<void> _fcmBackground(RemoteMessage message) async {}
 Future<void> _initFcm() async {
   try {
     await Firebase.initializeApp();
+    PushDiag.firebase = 'OK';
     FirebaseMessaging.onBackgroundMessage(_fcmBackground);
     final m = FirebaseMessaging.instance;
-    await m.requestPermission();
-    // iOS: APNs token gəlməmiş topic abunəliyi «apns-token-not-set» xətası verir.
-    // Token bir neçə saniyəyə gəlir — gözləyirik, yoxsa abunəlik yaranmır və push gəlmir.
-    if (Platform.isIOS) {
-      for (var i = 0; i < 20 && await m.getAPNSToken() == null; i++) {
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-    }
-    await m.subscribeToTopic('new_products');
+    final settings = await m.requestPermission();
+    PushDiag.permission = settings.authorizationStatus.name;
     // Tətbiq AÇIQ ikən push gələndə — ana səhifə banneri dərhal göstərsin (səslə).
     FirebaseMessaging.onMessage.listen((_) => foregroundPushTick.value++);
+    // Abunəlik arxa fonda, təkrar cəhdlə — tətbiqin açılışını gözlətmir.
+    unawaited(_subscribeWithRetry(m));
   } catch (e) {
-    // Firebase qurulmayıbsa tətbiq yenə işləyir; səbəbi logda görünsün deyə yazırıq.
+    // Firebase qurulmayıbsa tətbiq yenə işləyir; səbəbi diaqnostikada və logda görünür.
+    PushDiag.firebase = 'XƏTA';
+    PushDiag.lastError = '$e';
     debugPrint('FCM işə düşmədi: $e');
+  }
+}
+
+String _tokTail(String t) => t.length <= 8 ? t : '…${t.substring(t.length - 8)}';
+
+// iOS-da APNs token bəzən bir neçə saniyə gecikir; token gəlmədən subscribeToTopic
+// «apns-token-not-set» verir və abunəlik heç vaxt yaranmır. Ona görə ~2 dəqiqə ərzində
+// təkrar cəhd edirik. Hər mərhələnin nəticəsi PushDiag-a yazılır.
+Future<void> _subscribeWithRetry(FirebaseMessaging m) async {
+  for (var attempt = 0; attempt < 24; attempt++) {
+    try {
+      if (Platform.isIOS) {
+        final apns = await m.getAPNSToken();
+        PushDiag.apns = apns == null ? 'yoxdur' : 'var (${_tokTail(apns)})';
+        if (apns == null) {
+          await Future.delayed(const Duration(seconds: 5));
+          continue;
+        }
+      } else {
+        PushDiag.apns = 'lazım deyil (Android)';
+      }
+      final token = await m.getToken();
+      PushDiag.fcmFull = token ?? '';
+      PushDiag.fcm = token == null ? 'yoxdur' : 'var (${_tokTail(token)})';
+      await m.subscribeToTopic('new_products');
+      PushDiag.topic = 'abunə olundu';
+      PushDiag.lastError = '';
+      return;
+    } catch (e) {
+      PushDiag.topic = 'alınmadı';
+      PushDiag.lastError = '$e';
+      debugPrint('FCM abunəlik cəhdi ${attempt + 1}: $e');
+      await Future.delayed(const Duration(seconds: 5));
+    }
   }
 }
 
