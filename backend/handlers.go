@@ -190,7 +190,7 @@ func createItem(w http.ResponseWriter, r *http.Request) {
 	db.Preload("Category").Preload("Branch").Preload("Values.Attribute").Preload("Translations").First(&it, it.ID)
 	// yeni məhsul saytda görünürsə → telefonlara push (arxa planda)
 	if it.ShowOnSite {
-		go sendNewProductPush("Yeni məhsul 🔔", it.Name)
+		go sendNewProductPush("Stoka yeni məhsul əlavə olundu", it.Name)
 	}
 	writeJSON(w, 201, it)
 }
