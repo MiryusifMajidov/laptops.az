@@ -150,6 +150,11 @@ func sendNewProductPush(title, body string) {
 				"body":  body,
 			},
 			"android": map[string]any{"priority": "high"},
+			// iOS: APNs bloku olmasa bildiriş səssiz gəlir və prioriteti aşağı olur
+			"apns": map[string]any{
+				"headers": map[string]any{"apns-priority": "10"},
+				"payload": map[string]any{"aps": map[string]any{"sound": "default"}},
+			},
 		},
 	}
 	b, _ := json.Marshal(msg)

@@ -1,4 +1,6 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -21,11 +23,19 @@ Future<void> _initFcm() async {
     FirebaseMessaging.onBackgroundMessage(_fcmBackground);
     final m = FirebaseMessaging.instance;
     await m.requestPermission();
+    // iOS: APNs token gəlməmiş topic abunəliyi «apns-token-not-set» xətası verir.
+    // Token bir neçə saniyəyə gəlir — gözləyirik, yoxsa abunəlik yaranmır və push gəlmir.
+    if (Platform.isIOS) {
+      for (var i = 0; i < 20 && await m.getAPNSToken() == null; i++) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    }
     await m.subscribeToTopic('new_products');
     // Tətbiq AÇIQ ikən push gələndə — ana səhifə banneri dərhal göstərsin (səslə).
     FirebaseMessaging.onMessage.listen((_) => foregroundPushTick.value++);
-  } catch (_) {
-    // Firebase konfiqurasiyası yoxdursa — səssizcə davam et
+  } catch (e) {
+    // Firebase qurulmayıbsa tətbiq yenə işləyir; səbəbi logda görünsün deyə yazırıq.
+    debugPrint('FCM işə düşmədi: $e');
   }
 }
 
