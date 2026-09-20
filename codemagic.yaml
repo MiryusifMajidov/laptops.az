@@ -53,21 +53,42 @@ workflows:
           # Aşağıdaki fallback onu avtomatlaşdırır: köhnə sertifikatların private key-i
           # onsuz da bizdə yoxdur (hər dəfə atılan açar) → istifadəsizdirlər, ləğv etmək
           # təhlükəsizdir və App Store-da olan buraxılışlara təsir etmir.
-          openssl genrsa -out /tmp/cert_key.pem 2048
+          # Codemagic-də CERTIFICATE_PRIVATE_KEY env dəyişəni varsa — HƏMİŞƏ eyni sertifikat
+          # işlədilir və Apple-ın distribution limiti (409) bir daha dolmur.
+          if [ -n "$CERTIFICATE_PRIVATE_KEY" ]; then
+            echo "Sabit imzalama açarı işlədilir (CERTIFICATE_PRIVATE_KEY)."
+            KEY_ARG="--certificate-key=@env:CERTIFICATE_PRIVATE_KEY"
+          else
+            echo "Sabit açar yoxdur — bu build üçün müvəqqəti açar yaradılır."
+            openssl genrsa -out /tmp/cert_key.pem 2048
+            KEY_ARG="--certificate-key=@file:/tmp/cert_key.pem"
+          fi
           fetch_signing() {
             app-store-connect fetch-signing-files "az.laptops.laptopsAz" \
-              --type IOS_APP_STORE \
-              --certificate-key=@file:/tmp/cert_key.pem \
-              --create
+              --type IOS_APP_STORE $KEY_ARG --create
           }
           if ! fetch_signing; then
-            echo "!! İmzalama faylları alınmadı — ehtimal 409 (sertifikat limiti). Köhnə distribution sertifikatları ləğv edilir."
-            for cid in $(app-store-connect certificates list --certificate-type IOS_DISTRIBUTION --json 2>/dev/null \
-                          | grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' \
-                          | sed 's/.*"\([^"]*\)"$/\1/' | head -5); do
-              echo "   ləğv: $cid"
-              app-store-connect certificates delete "$cid" --yes 2>/dev/null || true
+            echo "!! İmzalama faylları alınmadı — ehtimal 409 (sertifikat limiti)."
+            echo "   Mövcud distribution sertifikatlarının private key-i bizdə yoxdur (hər build atılan açar yaradırdı),"
+            echo "   yəni onlar istifadəsizdir — ləğv edilir. Mağazadakı buraxılışlara təsir etmir."
+            rm -f /tmp/cert_ids.txt
+            # DİQQƏT: düzgün parametrlər --type və --ignore-not-found-dur
+            # (--certificate-type / --yes YOXDUR; səhv yazılsa komanda susmadan xəta verir).
+            for t in IOS_DISTRIBUTION DISTRIBUTION; do
+              app-store-connect certificates list --type "$t" --json > /tmp/certs.json || true
+              grep -o '"id"[[:space:]]*:[[:space:]]*"[^"]*"' /tmp/certs.json \
+                | sed 's/.*"\([^"]*\)"$/\1/' >> /tmp/cert_ids.txt || true
             done
+            sort -u /tmp/cert_ids.txt | head -5 > /tmp/cert_ids_uniq.txt
+            echo "   tapılan sertifikatlar: $(tr '\n' ' ' < /tmp/cert_ids_uniq.txt)"
+            while read -r cid; do
+              [ -n "$cid" ] || continue
+              if app-store-connect certificates delete "$cid" --ignore-not-found; then
+                echo "   ləğv edildi: $cid"
+              else
+                echo "   ləğv ALINMADI: $cid"
+              fi
+            done < /tmp/cert_ids_uniq.txt
             # təkrar cəhd — limit boşaldıqdan sonra
             fetch_signing
           fi
