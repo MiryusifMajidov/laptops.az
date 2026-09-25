@@ -168,14 +168,21 @@ func updateConsignment(w http.ResponseWriter, r *http.Request) {
 	// Başqa statusa keçsə (geri, hələ ödənilməyib) → əvvəl yaradılmış satışı sil.
 	if in.Status == "sold_paid" {
 		if c.SaleID == nil && c.ItemID != nil {
-			var it Item
-			db.First(&it, *c.ItemID)
-			sale := Sale{
-				ItemID: *c.ItemID, SalePrice: c.GivenPrice, Profit: c.GivenPrice - c.Cost,
-				Channel: "cash", BranchID: it.BranchID, SoldAt: time.Now(), Counted: true,
+			// Malın artıq satış qeydi varsa TƏKRAR YARATMA — mövcud satışı mənimsə.
+			// (Bir fiziki satış üçün iki pul qeydi qəti olmaz.)
+			var ex Sale
+			if db.Where("item_id = ?", *c.ItemID).Order("id").First(&ex).Error == nil {
+				c.SaleID = &ex.ID
+			} else {
+				var it Item
+				db.First(&it, *c.ItemID)
+				sale := Sale{
+					ItemID: *c.ItemID, SalePrice: c.GivenPrice, Profit: c.GivenPrice - c.Cost,
+					Channel: "cash", BranchID: it.BranchID, SoldAt: time.Now(), Counted: true,
+				}
+				db.Create(&sale)
+				c.SaleID = &sale.ID
 			}
-			db.Create(&sale)
-			c.SaleID = &sale.ID
 		}
 	} else if c.SaleID != nil {
 		db.Delete(&Sale{}, *c.SaleID)

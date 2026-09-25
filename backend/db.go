@@ -88,6 +88,7 @@ func initDB() {
 	applySync20260913()          // Excel 10→13 sentyabr: yeni mallar, satışlar, realizasiya, transfer
 	applySync20260913b()         // Excel ↔ DB əvvəldən qalmış fərqlərin düzəlişi (2-ci dalğa)
 	applySync20260925()          // Excel son 1 ayın YENİ hərəkətləri (köhnə qeydlərə toxunulmur)
+	applySync20260925b()         // Excel = həqiqət: tarix/qiymət/maya + dublikatların birləşdirilməsi
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
