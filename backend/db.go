@@ -87,6 +87,7 @@ func initDB() {
 	applyFix7202609()            // kredit köçürməsinin təmizlənməsi (47 sil + 3 bərpa)
 	applySync20260913()          // Excel 10→13 sentyabr: yeni mallar, satışlar, realizasiya, transfer
 	applySync20260913b()         // Excel ↔ DB əvvəldən qalmış fərqlərin düzəlişi (2-ci dalğa)
+	applySync20260925()          // Excel son 1 ayın YENİ hərəkətləri (köhnə qeydlərə toxunulmur)
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
