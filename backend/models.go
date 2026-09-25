@@ -154,6 +154,9 @@ type Consignment struct {
 	Debt       float64   `json:"debt"`
 	// "sold_paid" olanda yaradılan satış (pul kassaya gəlir) — geri dönəndə silmək üçün
 	SaleID *uint `json:"sale_id"`
+	// Satışı BU realizasiya axını yaratdımı? Yalnız o halda status geri dəyişəndə silinə bilər.
+	// Mövcud (məs. Excel-dən gələn) satış mənimsənilibsə false qalır və silinmir, yalnız bağlantı açılır.
+	SaleOwned bool `json:"sale_owned"`
 }
 
 // Expense — xərclər (kirayə, maaş, kommunal…)

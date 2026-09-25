@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -168,25 +169,48 @@ func updateConsignment(w http.ResponseWriter, r *http.Request) {
 	// Başqa statusa keçsə (geri, hələ ödənilməyib) → əvvəl yaradılmış satışı sil.
 	if in.Status == "sold_paid" {
 		if c.SaleID == nil && c.ItemID != nil {
+			var it Item
+			db.First(&it, *c.ItemID)
 			// Malın artıq satış qeydi varsa TƏKRAR YARATMA — mövcud satışı mənimsə.
 			// (Bir fiziki satış üçün iki pul qeydi qəti olmaz.)
+			// Şərtlər: satış realizasiyaya verildikdən SONRA olmalı, başqa realizasiyaya
+			// bağlanmamış olmalı; çoxsaylı (say>1) aksesuar kartlarında mənimsəmə edilmir.
 			var ex Sale
-			if db.Where("item_id = ?", *c.ItemID).Order("id").First(&ex).Error == nil {
+			found := false
+			if it.Quantity <= 1 {
+				found = db.Where("item_id = ? AND sold_at >= ?", *c.ItemID, c.GivenAt).
+					Where("id NOT IN (SELECT sale_id FROM consignments WHERE sale_id IS NOT NULL)").
+					Order("id desc").First(&ex).Error == nil
+			}
+			if found {
 				c.SaleID = &ex.ID
+				c.SaleOwned = false // bizim yaratmadığımız satış — geri dönəndə silinməyəcək
 			} else {
-				var it Item
-				db.First(&it, *c.ItemID)
 				sale := Sale{
 					ItemID: *c.ItemID, SalePrice: c.GivenPrice, Profit: c.GivenPrice - c.Cost,
 					Channel: "cash", BranchID: it.BranchID, SoldAt: time.Now(), Counted: true,
 				}
 				db.Create(&sale)
 				c.SaleID = &sale.ID
+				c.SaleOwned = true
 			}
 		}
 	} else if c.SaleID != nil {
-		db.Delete(&Sale{}, *c.SaleID)
+		// Pul qeydi itməsin: yalnız BU axının yaratdığı satış silinir. Kənardan gələn
+		// (Excel ilə təsdiqlənmiş) satış saxlanılır, sadəcə bağlantı açılır.
+		var old Sale
+		hasOld := db.First(&old, *c.SaleID).Error == nil
+		if c.SaleOwned && hasOld {
+			log.Printf("realizasiya #%d → «%s»: satış silinir id=%d mal=%d %.2f₼ %s mənfəət=%.2f filial=%d",
+				c.ID, in.Status, old.ID, old.ItemID, old.SalePrice,
+				old.SoldAt.Format("2006-01-02"), old.Profit, old.BranchID)
+			db.Delete(&Sale{}, *c.SaleID)
+		} else if hasOld {
+			log.Printf("realizasiya #%d → «%s»: satış #%d SAXLANILIR (kənar qeyd), yalnız bağlantı açılır",
+				c.ID, in.Status, old.ID)
+		}
 		c.SaleID = nil
+		c.SaleOwned = false
 	}
 
 	db.Save(&c)

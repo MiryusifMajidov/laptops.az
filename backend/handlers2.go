@@ -137,13 +137,16 @@ func reportsHandler(w http.ResponseWriter, r *http.Request) {
 	topQ.Group("items.name").Order("count desc").Limit(5).Scan(&top)
 
 	var perf []perfRow
-	perfQ := db.Model(&Sale{}).Select("branches.name as name, COALESCE(SUM(sales.profit),0) as profit").
-		Joins("JOIN branches ON branches.id = sales.branch_id").
+	// LEFT JOIN: filialı yazılmayan (branch_id=0) satışlar hesabatdan DÜŞMƏMƏLİDİR —
+	// əks halda filial cəmi ümumi dövriyyədən az çıxır və pul «yox olur».
+	perfQ := db.Model(&Sale{}).
+		Select("COALESCE(branches.name, 'Filialsız') as name, COALESCE(SUM(sales.profit),0) as profit").
+		Joins("LEFT JOIN branches ON branches.id = sales.branch_id").
 		Where("sales.counted = ?", true)
 	if restricted {
 		perfQ = perfQ.Where("sales.branch_id = ?", bid)
 	}
-	perfQ.Group("branches.name").Order("profit desc").Scan(&perf)
+	perfQ.Group("COALESCE(branches.name, 'Filialsız')").Order("profit desc").Scan(&perf)
 
 	var inStock []Item // ölü stok — anbar bütün filiallara açıq (qlobal)
 	db.Where("status = ?", "in_stock").Find(&inStock)

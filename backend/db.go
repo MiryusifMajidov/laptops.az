@@ -53,6 +53,9 @@ func initDB() {
 		db.Exec("UPDATE sales SET quantity = 1")
 		log.Println("migrasiya: mövcud satışlar quantity=1 edildi")
 	}
+	// sale_owned sütunu sonradan əlavə olundu: köhnə sətirlərdə NULL qalmasın.
+	// false = «satışı bu realizasiya axını yaratmayıb» → status geri dəyişəndə satış silinməyəcək.
+	db.Exec("UPDATE consignments SET sale_owned = 0 WHERE sale_owned IS NULL")
 	seed()
 	seedAuth()
 	seedI18n()
@@ -90,6 +93,7 @@ func initDB() {
 	applySync20260925()          // Excel son 1 ayın YENİ hərəkətləri (köhnə qeydlərə toxunulmur)
 	applySync20260925b()         // Excel = həqiqət: tarix/qiymət/maya + dublikatların birləşdirilməsi
 	applySync20260925c()         // Excel-də realizasiyadan çıxıb satılanlar → «satılıb·ödənilib»
+	applySync20260925d()         // seriyasız kölgə kartlar + anaqram seriya: dublikat satışların silinməsi
 }
 
 // optOrder — attribute option-larını sıraya (position, sonra id) görə düzmək üçün Preload köməkçisi
