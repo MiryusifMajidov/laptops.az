@@ -158,6 +158,16 @@ func applySync20260925() {
 				skip("add_item_and_sale", m.Serial)
 				continue
 			}
+			// Seriyasız sətirləri serialTaken qorumur. Yarımçıq işləmədən sonra təkrar
+			// başlasa dublikat yaranmasın deyə: eyni ad + eyni məbləğ + eyni gün varsa keçirik.
+			var dup int64
+			db.Model(&Sale{}).Joins("JOIN items ON items.id = sales.item_id").
+				Where("items.name = ? AND sales.sale_price = ? AND substr(sales.sold_at,1,10) = ?",
+					m.Name, m.SalePrice, m.SoldAt).Count(&dup)
+			if dup > 0 {
+				skip("add_item_and_sale(dublikat)", m.Name)
+				continue
+			}
 			// ƏVVƏL «stokda» yaradılır, satış yazıldıqdan SONRA «satıldı» edilir:
 			// arada proses çöksə, satış qeydi olmayan «satıldı» mal qalmır (təsdiq siyahısını zibilləmir).
 			it := Item{Name: m.Name, Serial: m.Serial, BranchID: m.BranchID, CategoryID: m.CategoryID,
