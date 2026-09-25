@@ -23,6 +23,11 @@ type sync25Plan struct {
 		Cost       float64 `json:"cost"`
 		CreatedAt  string  `json:"created_at"`
 	} `json:"add_stock"`
+	// admin malı əl ilə yaradıb, mayasını boş qoyub → YALNIZ boş mayanı tamamlayır
+	SetCost []struct {
+		ItemID uint    `json:"item_id"`
+		Cost   float64 `json:"cost"`
+	} `json:"set_cost"`
 	SetBranch []struct {
 		ItemID   uint `json:"item_id"`
 		BranchID uint `json:"branch_id"`
@@ -61,12 +66,9 @@ type sync25Plan struct {
 		ConsignmentID uint    `json:"consignment_id"`
 		SalePrice     float64 `json:"sale_price"`
 		SoldAt        string  `json:"sold_at"`
+		// malın mayası DB-də boşdursa Excel-dəki maya (mənfəət uydurma çıxmasın deyə)
+		Cost float64 `json:"cost"`
 	} `json:"close_consignment_sold"`
-	// realizasiyadan geri qayıdan mal (Excel-də yenidən stokda görünür)
-	ReturnConsignment []struct {
-		ConsignmentID uint `json:"consignment_id"`
-		ItemID        uint `json:"item_id"`
-	} `json:"return_consignment"`
 }
 
 func applySync20260925() {
@@ -86,7 +88,7 @@ func applySync20260925() {
 	}
 	skip := func(what string, id any) { log.Printf("%s: KEÇİLDİ %s %v (gözlənilən vəziyyət deyil)", marker, what, id) }
 	fail := func(what string, id any, err error) { log.Printf("%s: XƏTA %s %v: %v", marker, what, id, err) }
-	var nStock, nBranch, nSold, nNewSold, nCons, nNewCons, nCloseC, nRet int
+	var nStock, nCost, nBranch, nSold, nNewSold, nCons, nNewCons, nCloseC int
 
 	// 1) yeni gələn mallar
 	for _, m := range p.AddStock {
@@ -100,6 +102,17 @@ func applySync20260925() {
 			continue
 		}
 		nStock++
+	}
+
+	// 1b) boş qalmış maya dəyərini tamamla — mövcud düzgün mayanın üstünə YAZMIR
+	for _, m := range p.SetCost {
+		var it Item
+		if db.First(&it, m.ItemID).Error != nil || it.Cost != 0 || it.Status != "in_stock" {
+			skip("set_cost", m.ItemID)
+			continue
+		}
+		db.Model(&it).Update("cost", m.Cost)
+		nCost++
 	}
 
 	// 2) filiallar arası transfer
@@ -137,26 +150,32 @@ func applySync20260925() {
 		nSold++
 	}
 
-	// 4) DB-də ümumiyyətlə olmayan, gəlib satılmış mal
-	for _, m := range p.AddItemAndSale {
-		if serialTaken(m.Serial) {
-			skip("add_item_and_sale", m.Serial)
-			continue
+	// 4) DB-də ümumiyyətlə olmayan, gəlib satılmış mal (seriyasız aksesuar/işlənmiş satışlar da burada).
+	// Seriyasızları serialTaken qorumur → bütün addım üçün ayrıca marker: təkrar işləsə dublikat yaranmır.
+	if getSetting(marker+"_s4") != "1" {
+		for _, m := range p.AddItemAndSale {
+			if serialTaken(m.Serial) {
+				skip("add_item_and_sale", m.Serial)
+				continue
+			}
+			// ƏVVƏL «stokda» yaradılır, satış yazıldıqdan SONRA «satıldı» edilir:
+			// arada proses çöksə, satış qeydi olmayan «satıldı» mal qalmır (təsdiq siyahısını zibilləmir).
+			it := Item{Name: m.Name, Serial: m.Serial, BranchID: m.BranchID, CategoryID: m.CategoryID,
+				Cost: m.Cost, Price: m.SalePrice, Quantity: 1, Status: "in_stock", ShowOnSite: false,
+				CreatedAt: f2date(m.SoldAt)}
+			if err := db.Create(&it).Error; err != nil || it.ID == 0 {
+				fail("add_item_and_sale(item)", m.Serial, err)
+				continue
+			}
+			if err := db.Create(&Sale{ItemID: it.ID, SalePrice: m.SalePrice, Quantity: 1, Profit: m.SalePrice - m.Cost,
+				Channel: "cash", BranchID: m.BranchID, SoldAt: f2date(m.SoldAt), Counted: true}).Error; err != nil {
+				fail("add_item_and_sale(sale)", it.ID, err)
+				continue
+			}
+			db.Model(&it).Updates(map[string]any{"status": "sold", "quantity": 0})
+			nNewSold++
 		}
-		it := Item{Name: m.Name, Serial: m.Serial, BranchID: m.BranchID, CategoryID: m.CategoryID,
-			Cost: m.Cost, Price: m.SalePrice, Quantity: 1, Status: "sold", ShowOnSite: false,
-			CreatedAt: f2date(m.SoldAt)}
-		if err := db.Create(&it).Error; err != nil || it.ID == 0 {
-			fail("add_item_and_sale(item)", m.Serial, err)
-			continue
-		}
-		db.Model(&it).Update("quantity", 0) // Quantity-nin gorm default:1 tag-ı var
-		if err := db.Create(&Sale{ItemID: it.ID, SalePrice: m.SalePrice, Quantity: 1, Profit: m.SalePrice - m.Cost,
-			Channel: "cash", BranchID: m.BranchID, SoldAt: f2date(m.SoldAt), Counted: true}).Error; err != nil {
-			fail("add_item_and_sale(sale)", it.ID, err)
-			continue
-		}
-		nNewSold++
+		setSetting(marker+"_s4", "1")
 	}
 
 	// 5) mövcud malı realizasiyaya ver (createConsignment ilə eyni: borc = maya)
@@ -192,8 +211,9 @@ func applySync20260925() {
 			skip("add_item_and_consign", m.Serial)
 			continue
 		}
+		// satış yolu ilə eyni ardıcıllıq: əvvəl «stokda», realizasiya sətri yarandıqdan sonra status dəyişir
 		it := Item{Name: m.Name, Serial: m.Serial, BranchID: m.BranchID, CategoryID: m.CategoryID,
-			Cost: m.Cost, Price: m.GivenPrice, Quantity: 1, Status: "consignment", ShowOnSite: false,
+			Cost: m.Cost, Price: m.GivenPrice, Quantity: 1, Status: "in_stock", ShowOnSite: false,
 			CreatedAt: f2date(m.GivenAt)}
 		if err := db.Create(&it).Error; err != nil || it.ID == 0 {
 			fail("add_item_and_consign(item)", m.Serial, err)
@@ -205,6 +225,7 @@ func applySync20260925() {
 			fail("add_item_and_consign(consignment)", it.ID, err)
 			continue
 		}
+		db.Model(&it).Update("status", "consignment")
 		nNewCons++
 	}
 
@@ -226,7 +247,14 @@ func applySync20260925() {
 			skip("close_consignment_sold(artıq satış var)", m.ConsignmentID)
 			continue
 		}
-		sale := Sale{ItemID: it.ID, SalePrice: m.SalePrice, Quantity: 1, Profit: m.SalePrice - it.Cost,
+		// maya boşdursa Excel-dəkini yazırıq, yoxsa mənfəət bütün satış məbləği qədər uydurma çıxar
+		cost := it.Cost
+		if cost == 0 && m.Cost > 0 {
+			cost = m.Cost
+			db.Model(&it).Update("cost", cost)
+			db.Model(&cs).Update("cost", cost)
+		}
+		sale := Sale{ItemID: it.ID, SalePrice: m.SalePrice, Quantity: 1, Profit: m.SalePrice - cost,
 			Channel: "cash", BranchID: it.BranchID, SoldAt: f2date(m.SoldAt), Counted: true}
 		if err := db.Create(&sale).Error; err != nil || sale.ID == 0 {
 			fail("close_consignment_sold", m.ConsignmentID, err)
@@ -237,27 +265,9 @@ func applySync20260925() {
 		nCloseC++
 	}
 
-	// 8) realizasiyadan geri qayıtdı → stoka (updateConsignment «returned» ilə eyni)
-	for _, m := range p.ReturnConsignment {
-		var cs Consignment
-		if db.First(&cs, m.ConsignmentID).Error != nil || cs.Status != "out" ||
-			cs.ItemID == nil || *cs.ItemID != m.ItemID {
-			skip("return_consignment", m.ConsignmentID)
-			continue
-		}
-		var it Item
-		if db.First(&it, m.ItemID).Error != nil || it.Status != "consignment" {
-			skip("return_consignment(mal)", m.ItemID)
-			continue
-		}
-		db.Model(&cs).Updates(map[string]any{"status": "returned", "debt": 0})
-		db.Model(&it).Update("status", "in_stock")
-		nRet++
-	}
-
-	log.Printf("%s: yeni_stok=%d transfer=%d satis=%d yeni_satilan=%d realiz_verildi=%d "+
-		"yeni_mal_realiz=%d realiz_satildi=%d realiz_qayitdi=%d",
-		marker, nStock, nBranch, nSold, nNewSold, nCons, nNewCons, nCloseC, nRet)
+	log.Printf("%s: yeni_stok=%d maya=%d transfer=%d satis=%d yeni_satilan=%d realiz_verildi=%d "+
+		"yeni_mal_realiz=%d realiz_satildi=%d",
+		marker, nStock, nCost, nBranch, nSold, nNewSold, nCons, nNewCons, nCloseC)
 	setSetting(marker+"_done", "1")
 	os.Remove(path)
 }
